@@ -1,12 +1,12 @@
 # Skeernir
 
 ... to be explained soon
-
-
-
-# Project Update: Intensive Development Phase
-
 The project in an intensive development phase. Here's what you need to do to get your environment set up and get started:
+
+
+
+The project in an intensive development phase. 
+Here's what you need to do to get your environment set up and get started:
 
 ## Setup Conda Environment with Python 3.11
 
@@ -48,16 +48,35 @@ pip install -r requirements.txt --no-cache-dir
 
 ## Add / configure your graphs
 
+All graphs should be Langgraph compiled graphs, see examples in `/src/graphs`. 
+Decorate function using `@tool_graph` which returns compiled graph and restart app - the graph will be available in UI. Find more details in tutorial (here would be a link)
 Configure your models for use in both vendor-provided LLMs and locally-deployed instances:
 
-1. Vendor LLMs (e.g., GPT-4o-mini)
-For LLMs provided by vendors like GPT-4o-mini, edit the following template in .configs/default_graph.py:
+1. Vendor LLMs (e.g., GPT-4o-mini or Sonnet3.5)
+For LLMs provided by vendors like GPT-4o-mini, add the following configs - .configs/gpt-4o-mini-default.json and .configs/Sonnet35.json
 ```json
 {
     "api_token": "<your token api>"
 }
 ```
 Replace <your_token_api> with your actual API token.
+
+For example with corrective_rag add the following config - .configs/openai-rag-corrective.json
+```json
+{
+    "api_token": "<your token api>",
+    "tavily_api_key": "<your token api>",
+    "vectordb_path": "<location for chroma db>",
+    "collection_name": "<name for db you would like to use"
+}
+```
+
+Then run ingestion script to fill vector databse with small amount of data for demo:
+
+```console
+python src/graphs/corrective_rag/corrective_rag_example_ingestion.py
+```
+
 
 2. Locally-deployed Models
 For locally deployed models, refer to the following Python scripts as examples:

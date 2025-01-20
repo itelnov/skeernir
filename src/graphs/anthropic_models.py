@@ -15,7 +15,7 @@ if p not in sys.path:
 from src.registry import tool_graph
 
 
-@tool_graph(name='Sonet35', tag="chat/vision API", att_modals=['text', 'image'])
+@tool_graph(name='Sonnet35', tag="chat/vision API", att_modals=['text', 'image'])
 def get_claude(api_token=None, **kwargs):
     
     memory = MemorySaver()
@@ -65,7 +65,7 @@ if __name__ == "__main__":
         asyncio.run(
             run_graph_in_terminal(
                 graph_manager=GM,
-                config="Sonet35",
+                config="Sonnet35",
                 session_id=session_id))
     finally:
         

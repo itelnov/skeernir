@@ -9,7 +9,7 @@ __pycache__/
 # json configs
 configs/gpt-4o-mini-default.json
 configs/openai-rag-corrective.json
-configs/Sonet35.json
+configs/Sonnet35.json
 
 
 chat.db

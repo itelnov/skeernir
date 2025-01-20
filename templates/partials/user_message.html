@@ -1,0 +1,54 @@
+{% macro render_attachment(attachment) %}
+    <div class="attachment p-2 rounded-lg border border-slate-600">
+        {% if attachment.type in ['image/png', 'image/jpg', 'image/jpeg', 'image/gif'] %}
+            {# Display low-resolution image #}
+            {% if attachment.processed_content %}
+                {# In-memory image data (base64 encoded) #}
+                <img src="data:{{ attachment.type }};base64,{{ attachment.processed_content }}" 
+                     alt="{{ attachment.filename }}" 
+                     class="attachment-image low-res"
+                     style="max-width: 100px; max-height: 100px; object-fit: contain;"
+                >
+            {% endif %}
+        {% else %}
+            {# Display file icon with filename #}
+            <div class="file-attachment">
+                <svg xmlns="http://www.w3.org/2000/svg"
+                     width="24"
+                     height="24"
+                     viewBox="0 0 24 24"
+                     fill="none"
+                     stroke="currentColor"
+                     stroke-width="2"
+                     stroke-linecap="round"
+                     stroke-linejoin="round"
+                     class="feather feather-file">
+                    <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
+                    <polyline points="13 2 13 9 20 9"></polyline>
+                </svg>
+                <span class="filename">{{ attachment.filename }}</span>
+                {% if attachment.size %}
+                    <span class="filesize">({{ attachment.size|filesizeformat }})</span>
+                {% endif %}
+            </div>
+        {% endif %}
+    </div>
+{% endmacro %}
+<div class="mb-1">
+    <div class="flex flex-col">
+        <div class="flex justify-end m-1 w-full">
+            <div class="user-message">
+                <div class="bg-indigo-800 rounded-lg py-2 px-3 text-white">
+                    {{ message | markdown_to_html | safe }}
+                </div>
+                {% if attachments %}
+                <div class="flex flex-row m-2 p-2 rounded-sm ">
+                    {% for attachment in attachments %}
+                        {{ render_attachment(attachment) }}
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,11 @@
+<div class="mb-1">
+    <div class="flex flex-col">
+        <div class="flex justify-start m-1">
+            <div class="bot-message">
+                <div class="rounded-lg py-2 px-3">
+                    {{ bot_message | markdown_to_html | safe }}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

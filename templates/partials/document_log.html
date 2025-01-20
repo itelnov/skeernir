@@ -1,0 +1,39 @@
+<div class="p-6">
+    <div class="w-full bg-gray-900 hover:bg-gray-800 rounded-lg overflow-hidden">
+        <div class="p-2">
+            {# Title with fallback if not provided #}
+            {% if title %}
+                <h2 class="text-lg font-bold text-white mb-2">{{ title }}</h2>
+            {% endif %}
+
+            {# Source with hyperlink if valid URL #}
+            {% if source %}
+                {% if source.startswith('http://') or source.startswith('https://') %}
+                    <a href="{{ source }}" 
+                        target="_blank"
+                        rel="noopener noreferrer" 
+                        class="text-blue-600 hover:text-blue-800 text-sm 
+                            hover:underline truncate whitespace-nowrap 
+                            overflow-hidden text-ellipsis">
+                        {{ source }}
+                    </a>
+                {% else %}
+                    <p class="text-gray-500 text-sm">{{ source }}</p>
+                {% endif %}
+            {% endif %}
+
+            {# Description with truncation #}
+            {% if page_content %}
+                <details>
+                    <summary>Content</summary>
+                    <div class="max-h-96 overflow-y-auto">
+                        <p class="text-gray-400 whitespace-pre-wrap break-words">
+                            {{ page_content }}
+                        </p>
+                    </div>
+                </details>
+            {% endif %}
+
+        </div>
+    </div>
+</div>

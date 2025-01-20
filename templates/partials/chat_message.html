@@ -1,0 +1,22 @@
+<!-- templates/partials/chat_message.html -->
+<div class="mb-4">
+    <div class="flex flex-col">
+        <!-- User message
+        <div class="flex justify-end m-1">
+            <div class="user-message">
+                <div class="bg-indigo-600 rounded-lg py-2 px-3 text-white">
+                    {{ user_message | safe }}
+                </div>
+            </div>
+        </div>
+        -->
+        <!-- Bot message -->
+        <div class="flex justify-start m-1">
+            <div class="bot-message">
+                <div class="rounded-lg py-2 px-3">
+                    {{ bot_message | markdown_to_html | safe }}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

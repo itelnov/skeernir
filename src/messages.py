@@ -2,18 +2,17 @@ import io
 import requests
 import base64
 import asyncio
-from typing import Dict, List, Optional, Any, ClassVar, ClassVar
+from typing import Dict, List, Optional, Any, ClassVar, ClassVar, Union
 from collections import defaultdict
 from abc import ABC, abstractmethod
 from enum import Enum
 from pydantic import BaseModel, computed_field
 from markitdown import MarkItDown
-from jinja2 import Environment, FileSystemLoader
 from fastapi.templating import Jinja2Templates
 import json
 
 from src import models
-
+from src.registry import ModalsType
 
 # Custom exceptions
 class AttachmentProcessingError(Exception):
@@ -42,6 +41,7 @@ class AttachmentData(BaseModel):
     content_processed: Optional[str] = None
     content_size: Optional[int] = None
     processor_map: ClassVar[Dict[str, BaseProcessor]] = {}
+    valid_modalities: List[ModalsType] = ['text']
 
     @computed_field
     @property
@@ -59,10 +59,12 @@ class AttachmentData(BaseModel):
     @property
     def processed_content(self) -> str:
         if self.content_processed is None:
+            if self.modality in ModalsType._value2member_map_ and self.modality not in self.valid_modalities:
+                raise AttachmentProcessingError((
+                    f"Error processing for modality type: {self.modality}.\n"
+                    "It seems modality is known but not valid for this Graph"))
+
             processor = self.processor_map.get(self.modality, TextProcessor())
-            if not processor:
-                raise AttachmentProcessingError(
-                    f"No processor for {self.modality}")
             self.content_processed = processor.process_content(self)
         
         return self.content_processed
@@ -116,7 +118,8 @@ class TextProcessor(BaseProcessor):
                     f"Text conversion failed for {attach.filename}")
             return converted.text_content
         except Exception as e:
-            raise AttachmentProcessingError(f"Error processing text: {str(e)}")
+            raise AttachmentProcessingError(
+                f"Error processing text for {attach.filename}: \n\n{str(e)}")
 
     @classmethod
     def format_content(cls, attach: AttachmentData)-> Dict[str, str]:

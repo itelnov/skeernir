@@ -630,7 +630,7 @@ async def send_input_message(
     user = get_current_user(request, db)
     if not user:
         return RedirectResponse(url="/", status_code=status.HTTP_303_SEE_OTHER)
-    
+    session = GM.get_session(session_id)
     attachments = []
     if file:
         files = [file] if isinstance(file, UploadFile) else file
@@ -639,8 +639,8 @@ async def send_input_message(
             attachments.append(AttachmentData(
                 type=upload_file.content_type,
                 filename=upload_file.filename,
-                content=content
-                ))
+                content=content,
+                valid_modalities=session.graph.att_modals))
 
     await SMH.put_message(session_id, MessageInput(
         message=message, attachments=attachments))
@@ -766,9 +766,11 @@ async def stream_endpoint(
             db.add(bot_message_item)
             db.commit()
     
-        except AttachmentProcessingError:
+        except AttachmentProcessingError as e:
             yield sys_message(
-                message=("File extension in the attachment is not supported."), 
+                message=(
+                    "File extension in the attachment is not supported. "
+                    f"Details:\n\n {e}"),
                 message_type="warning")
 
         except Exception as e:
@@ -777,7 +779,7 @@ async def stream_endpoint(
                 message=(
                     "System: Shit happens. Nobody ever promised you a "
                     f"smooth ride. Deal with it and move on. This "
-                    f"conversation is finished.\n\n {e}"),
+                    f"conversation is finished. Additional info:\n\n {e}"),
                 message_type="error")
             
         finally:

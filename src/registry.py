@@ -7,11 +7,12 @@ import gc
 import socket
 import threading
 import subprocess
-from typing import Dict, Any, Callable, Optional, Literal, Set, List
+from typing import Dict, Any, Callable, Optional, Literal, Set, List, Union
 from threading import Lock
 from collections import defaultdict
 from functools import wraps
 from dataclasses import dataclass
+from enum import Enum
 
 from langchain.chat_models.base import BaseChatModel
 from langgraph.graph.state import CompiledStateGraph
@@ -89,10 +90,17 @@ class CompiledGraphResult:
     metadata: Dict
 
 
+class ModalsType(str, Enum):
+    TEXT = 'text'
+    IMAGE = 'image'
+    VIDEO = 'video'
+    AUDIO = 'audio'
+
+
 def tool_graph(
     name: str, 
     tag: str,
-    att_modals: Literal['text', 'image', 'video', 'audio'] = 'text',
+    att_modals: List[ModalsType] = ['text'],
     entries_map: bool = False
 ):
     """

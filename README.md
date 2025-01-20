@@ -1,6 +1,6 @@
 # Skeernir
 
-... to be explained soon
+... to be explained soon...
 The project in an intensive development phase. Here's what you need to do to get your environment set up and get started:
 
 

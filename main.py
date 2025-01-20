@@ -115,7 +115,7 @@ app.add_middleware(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allows all origins
+    allow_origins=[f"http://localhost:{os.environ['SKEERNIR_PORT']}"],
     allow_credentials=True,
     allow_methods=["GET", "POST"],
     allow_headers=["*"]
@@ -795,18 +795,15 @@ if __name__ == '__main__':
     import uvicorn
     import tracemalloc
     tracemalloc.start()
-
     try:
         uvicorn.run(
             app, 
-            host="0.0.0.0", 
-            port=8899,
+            host="localhost", 
+            port=int(os.environ["SKEERNIR_PORT"]),
             loop="asyncio",
             log_level="info",
             access_log=True,
-            ssl_keyfile="/docker_mount/secrets/key.pem",
-            ssl_certfile="/docker_mount/secrets/cert.pem",
-            ssl_keyfile_password="apple")
+            )
     
     except Exception as e:
         logger.info(f"An error occurred: {e}")

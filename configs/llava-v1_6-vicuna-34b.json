@@ -1,0 +1,13 @@
+{
+    "server": "llamacpp",
+    "clip_model_path": "/docker_mount/data/gguf_models/mmproj-vicuna34b-f16.gguf",
+    "model_path": "/docker_mount/data/gguf_models/llava-v1.6-vicuna-34b.Q4_K_M.gguf",
+    "ctx-size": 4096,
+    "use_gpu": true,
+    "n_gpu_layers": 10,
+    "cpu-strict": 0,
+    "flash-attn": true,
+    "generation": {
+        "temperature": 0.8
+    }
+}

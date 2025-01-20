@@ -1,0 +1,9 @@
+{
+    "server": "ollama",
+    "model_name": "llama3.2-vision",
+    "sampling": {
+        "temperature": 0.7,
+        "num_ctx": 4096
+    }
+
+}

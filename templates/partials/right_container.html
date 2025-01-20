@@ -1,0 +1,9 @@
+<div id="right-container" class="flex flex-col w-full max-w-3xl m-2 bg-gray-900 rounded-lg shadow-md p-2 overflow-y-auto">
+    {% if graphlogs %}
+    <div>
+        {% for log in graphlogs %}
+            {{ log | safe }}
+        {% endfor %}
+    <div>
+    {% endif %}
+</div>

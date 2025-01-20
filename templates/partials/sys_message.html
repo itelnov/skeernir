@@ -1,0 +1,17 @@
+<div class="mb-1 w-full">
+    <div class="flex flex-col">
+        <div class="flex justify-end m-1">
+            <div class="user-message">
+                {% if message_type == "error" %}
+                    <div class="bg-red-800 rounded-lg py-2 px-3 text-white">
+                        {{ sys_message | safe }}
+                    </div>
+                {% else %}
+                    <div class="bg-amber-400 rounded-lg py-2 px-3 text-white">
+                        {{ sys_message | safe }}
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>

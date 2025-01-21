@@ -6,7 +6,9 @@
 <div id="main_chat" class="bg-gray-800 rounded-md p-1" data-session-id="{{ session_id }}">
     <div class="flex flex-row justify-end">
         <div class="flex flex-col px-4 py-2">
-            <p class="px-1 py-1"> {{ user }} </p>
+            <p class="p-1 px-10 rounded-lg hover:bg-gray-700"> 
+                {{ user + " Space" }} 
+            </p>
         </div>
         <div class="flex flex-col px-4 py-2">
             <div class="">
@@ -17,31 +19,30 @@
                         hx-push-url="true"
                         type="submit"
                         class=" bg-red-500 text-white text-center justify-center 
-                            px-1 py-1 rounded-lg hover:bg-red-600 transition-colors">
-                    Logout
+                            px-2 py-1 rounded-lg hover:bg-red-600 transition-colors">
+                    Sign Out
                 </button>
             </div>
         </div>
     </div>
     <div class="flex flex-row h-[calc(100vh-80px)] overflow-hidden rounded-lg mb-2 mt-0">
-        <div id="left-panel" class="flex flex-col w-56 rounded-lg bg-gray-900 pb-4">
-            <div class="flex flex-col mb-2 mt-2 rounded text-left truncate 
+        <div id="left-panel" class="flex flex-col w-56 rounded-lg bg-gray-900 pb-4 relative">
+            <div class="flex flex-col mb-2 mt-2 px-2 rounded text-left truncate 
                         whitespace-nowrap overflow-y-auto text-ellipsis">
-                <select name="selected_model" 
-                        class="action bg-gray-700 text-white text-sm 
-                            border, w-full border-slate-600 rounded-md 
-                            py-2 px-2 transition duration-150 ease-in-out 
-                            focus:outline-none focus:ring-2 focus:ring-blue-400 
-                            focus:border-transparent hover:bg-slate-700"
-                        id="graph_select"
-                        hx-get="/loadmodel/{{session_id}}"
-                        hx-target="body"
-                        hx-trigger="change"
-                        hx-on::before-request="
-                            const ChatElement = document.getElementById('chat-messages');
-                            ChatElement.classList.add('shine-animation');">
-                        {{ model_list | safe }}
-                </select>
+                <button
+                    id="dropdown-button"
+                    type="text"
+                    class="bg-gray-90 w-full p-2 rounded-lg truncate whitespace-nowrap overflow-y-auto text-ellipsis"
+                    hx-get="/select_graph/{{session_id}}"
+                    hx-trigger="input changed delay:200ms, focus"
+                    hx-target="#dropdown-menu"
+                    hx-swap="innerHTML"
+                    hx-on::before-request="handleGraphSelector();">
+                    {{graph}}
+                </button>
+                <div>
+                    <div id="dropdown-menu" class="absolute"></div>
+                </div>
             </div>
             <div class="flex flex-row justify-end">
                 <button hx-get="/newconv/{{session_id}}"
@@ -161,4 +162,3 @@
     </div>
 </div>
 {% endblock %}
-<!-- accept=".jpg, .jpeg, .png, .gif" -->

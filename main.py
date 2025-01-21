@@ -478,12 +478,12 @@ async def start_newconv(
 async def loadmodel(
     request: Request,
     session_id: str,
-    selected_model: Optional[str] = None
+    selected_graph: Optional[str] = None
 ):  
     try:
         GM.remove_session(session_id)
         await SMH.delete_queue(session_id)
-        GM.connect_session(session_id, selected_model)
+        GM.connect_session(session_id, selected_graph)
     except Exception as e:
         logger.error(e)
 
@@ -595,6 +595,7 @@ async def chat(
 
     return templates.TemplateResponse(request, "main.html",
         {   
+            "graph": f'{session.graph.name}: {session.graph.tag}',
             "user": user.username,
             "previous_messages": prev_messages_html,
             "conversation_list": prev_convs_html,
@@ -619,6 +620,21 @@ async def delconv(
 
     return {"status": "deleted"}
 
+
+@app.get("/select_graph/{session_id}", response_class=HTMLResponse)
+async def get_graphs_list(
+    request: Request,
+    session_id: str,
+):  
+    items = [
+        {"name": n, "tag": t} for n, t in GM._graphs_registry.list_graphs()]
+
+    return templates.TemplateResponse(request, "dropdown_items.html",
+        {
+            "session_id": session_id,
+            "items": items
+        },
+    )
 
 @app.post("/sendmessage/{session_id}", response_class=JSONResponse)
 async def send_input_message(

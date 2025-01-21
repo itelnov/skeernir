@@ -38,6 +38,7 @@
                         this.container = container;
                         this.currentMessage = null;
                         this.currentElement = null;
+                        this.hasUserScrolledUp = false;
                         this.streamState = {
                             mode: 'markdown', // 'markdown' or 'code'
                             codeLanguage: null,
@@ -74,6 +75,12 @@
                             'dockerfile': 'docker',
                             'Dockerfile': 'docker',
                             'asm' : 'armasm'
+                        }
+                    }
+                    // #TODO check the function and run it before stream starts
+                    handleScroll(event) {
+                        if (this.container.scrollTop < this.container.scrollHeight - this.container.clientHeight) {
+                            this.hasUserScrolledUp = true;
                         }
                     }
 
@@ -194,7 +201,9 @@
                             (element, index) => {
                             if (element !== "") {
                                 this.processChunk(element);
-                                this.container.scrollTop = this.container.scrollHeight;
+                                if (!this.userHasScrolledUp) {
+                                    this.container.scrollTop = this.container.scrollHeight;
+                                }
                             }
                         });
                     }
@@ -465,6 +474,28 @@
             
             fileListContainer.appendChild(fileNamesList);
         }
+    
+    function handleGraphSelector() {
+        // Show dropdown when hovering over the button or dropdown
+        const dropdownButton = document.getElementById('dropdown-button');
+        const dropdownMenu = document.getElementById('dropdown-menu');
+
+        dropdownButton.addEventListener('mouseenter', () => {
+        dropdownMenu.classList.remove('hidden');
+        });
+
+        dropdownMenu.addEventListener('mouseleave', () => {
+        dropdownMenu.classList.add('hidden');
+        });
+
+        dropdownButton.addEventListener('mouseleave', () => {
+            setTimeout(() => {
+                if (!dropdownMenu.matches(':hover')) {
+                dropdownMenu.classList.add('hidden');
+                }
+            }, 300);
+        });
+    }
     
     </script>
 </body>

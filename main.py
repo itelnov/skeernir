@@ -594,7 +594,8 @@ async def chat(
     
 
     return templates.TemplateResponse(request, "main.html",
-        {
+        {   
+            "user": user.username,
             "previous_messages": prev_messages_html,
             "conversation_list": prev_convs_html,
             "session_id": session_id,

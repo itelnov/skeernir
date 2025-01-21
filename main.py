@@ -115,7 +115,7 @@ app.add_middleware(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allows all origins
+    allow_origins=[f"http://localhost:{os.environ['SKEERNIR_PORT']}"],
     allow_credentials=True,
     allow_methods=["GET", "POST"],
     allow_headers=["*"]
@@ -594,7 +594,8 @@ async def chat(
     
 
     return templates.TemplateResponse(request, "main.html",
-        {
+        {   
+            "user": user.username,
             "previous_messages": prev_messages_html,
             "conversation_list": prev_convs_html,
             "session_id": session_id,
@@ -630,7 +631,7 @@ async def send_input_message(
     user = get_current_user(request, db)
     if not user:
         return RedirectResponse(url="/", status_code=status.HTTP_303_SEE_OTHER)
-    
+    session = GM.get_session(session_id)
     attachments = []
     if file:
         files = [file] if isinstance(file, UploadFile) else file
@@ -639,8 +640,8 @@ async def send_input_message(
             attachments.append(AttachmentData(
                 type=upload_file.content_type,
                 filename=upload_file.filename,
-                content=content
-                ))
+                content=content,
+                valid_modalities=session.graph.att_modals))
 
     await SMH.put_message(session_id, MessageInput(
         message=message, attachments=attachments))
@@ -766,9 +767,11 @@ async def stream_endpoint(
             db.add(bot_message_item)
             db.commit()
     
-        except AttachmentProcessingError:
+        except AttachmentProcessingError as e:
             yield sys_message(
-                message=("File extension in the attachment is not supported."), 
+                message=(
+                    "File extension in the attachment is not supported. "
+                    f"Details:\n\n {e}"),
                 message_type="warning")
 
         except Exception as e:
@@ -777,7 +780,7 @@ async def stream_endpoint(
                 message=(
                     "System: Shit happens. Nobody ever promised you a "
                     f"smooth ride. Deal with it and move on. This "
-                    f"conversation is finished.\n\n {e}"),
+                    f"conversation is finished. Additional info:\n\n {e}"),
                 message_type="error")
             
         finally:
@@ -795,18 +798,15 @@ if __name__ == '__main__':
     import uvicorn
     import tracemalloc
     tracemalloc.start()
-
     try:
         uvicorn.run(
             app, 
-            host="0.0.0.0", 
-            port=8899,
+            host="localhost", 
+            port=int(os.environ["SKEERNIR_PORT"]),
             loop="asyncio",
             log_level="info",
             access_log=True,
-            ssl_keyfile="/docker_mount/secrets/key.pem",
-            ssl_certfile="/docker_mount/secrets/cert.pem",
-            ssl_keyfile_password="apple")
+            )
     
     except Exception as e:
         logger.info(f"An error occurred: {e}")

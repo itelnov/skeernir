@@ -8,7 +8,7 @@
     <link href="{{ url_for('static', path='output.css') }}" rel="stylesheet">
     <link href="{{ url_for('static', path='prism.css') }}" rel="stylesheet"/>
 </head>
-<body>             
+<body>
     <div id='mainblock'>
         {% block content %}{% endblock %}
     </div>
@@ -38,6 +38,8 @@
                         this.container = container;
                         this.currentMessage = null;
                         this.currentElement = null;
+                        this.container.addEventListener('scroll', () => this.handleScroll());
+                        this.hasUserScrolledUp = false;
                         this.streamState = {
                             mode: 'markdown', // 'markdown' or 'code'
                             codeLanguage: null,
@@ -189,15 +191,27 @@
                         return new_chunk.split("|");
                     }
 
+                    // #TODO check the function and run it before stream starts
+                    handleScroll() {
+                        // Check if user has scrolled up from bottom
+                        const isAtBottom = Math.abs(
+                            this.container.scrollHeight - this.container.scrollTop - this.container.clientHeight
+                        ) < 1;
+                        this.userHasScrolledUp = !isAtBottom;
+                    }
+
                     addChunk(chunk) {
                         this.splitTripleBackticks(chunk).forEach(
                             (element, index) => {
                             if (element !== "") {
                                 this.processChunk(element);
-                                this.container.scrollTop = this.container.scrollHeight;
+                                if (!this.userHasScrolledUp) {
+                                    this.container.scrollTop = this.container.scrollHeight;
+                                }
                             }
                         });
                     }
+
                     processChunk(chunk) {
 
                         this.streamState.accumulatedContent += chunk;
@@ -466,6 +480,32 @@
             fileListContainer.appendChild(fileNamesList);
         }
     
+    function handleGraphSelector() {
+        // Show dropdown when hovering over the button or dropdown
+        const dropdownButton = document.getElementById('dropdown-button');
+        const dropdownMenu = document.getElementById('dropdown-menu');
+
+        dropdownButton.addEventListener('mouseenter', () => {
+        dropdownMenu.classList.remove('hidden');
+        });
+
+        dropdownMenu.addEventListener('mouseleave', () => {
+        dropdownMenu.classList.add('hidden');
+        });
+
+        dropdownButton.addEventListener('mouseleave', () => {
+            setTimeout(() => {
+                if (!dropdownMenu.matches(':hover')) {
+                dropdownMenu.classList.add('hidden');
+                }
+            }, 300);
+        });
+    }
+
+    function deleteItem(itemId) {
+        const itemElement = document.getElementById(itemId);
+        itemElement.remove();
+    }
     </script>
 </body>
 </html>

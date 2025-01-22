@@ -1,0 +1,20 @@
+<div class="flex flex-col bg-indigo-950 rounded-lg border border-gray-800">
+    {% for item in items %}
+    <button
+        class="bg-indigo-950 text-white text-sm rounded-lg text-right 
+            px-2 py-2 hover:bg-indigo-700 transition-colors"
+        hx-get="/loadmodel/{{session_id}}"
+        hx-vals='{"selected_graph": "{{item.name}}"}'
+        hx-target="body"
+        hx-on::before-request="
+            const ChatElement = document.getElementById('chat-messages');
+            ChatElement.classList.add('shine-animation');
+            const rightContainer = document.getElementById('right-container');
+            if (rightContainer) {
+                rightContainer.classList.remove('right-slide-in');
+                rightContainer.classList.add('right-slide-out');
+            }">    
+        {{ item.name + ": " + item.tag }}
+    </button>
+    {% endfor %}
+</div>

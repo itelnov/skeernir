@@ -478,12 +478,12 @@ async def start_newconv(
 async def loadmodel(
     request: Request,
     session_id: str,
-    selected_model: Optional[str] = None
+    selected_graph: Optional[str] = None
 ):  
     try:
         GM.remove_session(session_id)
         await SMH.delete_queue(session_id)
-        GM.connect_session(session_id, selected_model)
+        GM.connect_session(session_id, selected_graph)
     except Exception as e:
         logger.error(e)
 
@@ -579,27 +579,14 @@ async def chat(
     if graph_logs_html and session.graph.entries_map:
         right_container_html = RC_TEMPLATE.render(graphlogs=graph_logs_html)
 
-    #TODO recompile using templating and form instead of <select>
-    current_graph = (f'<option class="bg-gray-500 rounded-lg" ' +
-                     f'value="{session.graph.name}">{session.graph.name}: ' + 
-                     f'{session.graph.tag}</option>')
-
-    model_list = []
-    for (name, tag) in GM._graphs_registry.list_graphs():
-        if name == session.graph.name:
-            continue
-        model_list.append(f'<option value="{name}">{name}:{tag}</option>')
-    
-    model_list = ''.join(model_list)
-    
 
     return templates.TemplateResponse(request, "main.html",
         {   
+            "graph": f'{session.graph.name}: {session.graph.tag}',
             "user": user.username,
             "previous_messages": prev_messages_html,
             "conversation_list": prev_convs_html,
             "session_id": session_id,
-            "model_list": current_graph + model_list,
             "right_container": right_container_html
         })
 
@@ -618,6 +605,58 @@ async def delconv(
     delete_conversation_and_related(db, conv)
 
     return {"status": "deleted"}
+
+
+@app.get("/select_graph/{session_id}", response_class=HTMLResponse)
+async def get_graphs_list(
+    request: Request,
+    session_id: str,
+):  
+    items = [
+        {"name": n, "tag": t} for n, t in GM._graphs_registry.list_graphs()]
+
+    return templates.TemplateResponse(request, "dropdown_items.html",
+        {
+            "session_id": session_id,
+            "items": items
+        },
+    )
+
+
+@app.get("/user_settings/{session_id}", response_class=HTMLResponse)
+async def get_user_details(
+    request: Request,
+    session_id: str,
+    db: Session = Depends(get_db)
+):  
+    user = get_current_user(request, db)
+    if not user:
+        return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
+    
+    return templates.TemplateResponse(request, "user_details.html",
+        {
+            "user": {"name": user.username, "email": user.email},
+            "session_id": session_id,
+         }
+    )
+
+
+@app.delete("/user_settings/{session_id}", response_class=HTMLResponse)
+async def get_user_details(
+    request: Request,
+    session_id: str,
+    db: Session = Depends(get_db)
+):  
+    user = get_current_user(request, db)
+    if not user:
+        return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
+    
+    return templates.TemplateResponse(request, "user_details.html",
+        {
+            "user": {"name": user.username, "email": user.email},
+            "session_id": session_id,
+         }
+    )
 
 
 @app.post("/sendmessage/{session_id}", response_class=JSONResponse)

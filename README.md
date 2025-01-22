@@ -1,8 +1,48 @@
-# Skeernir
+# <img src="static/target_squered_wb.png" alt="drawing" width="50"/> Skeernir
 
-... to be explained soon...
+![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)
+![License](https://img.shields.io/badge/license-MIT-orange.svg)
+![Version](https://img.shields.io/badge/version-0.1.0-red.svg)
+<!-- ![Stars](https://img.shields.io/github/stars/itelnov/skeernir.svg)
+![Forks](https://img.shields.io/github/forks/itelnov/skeernir.svg)
+![Issues](https://img.shields.io/github/issues/itelnov/skeernir.svg) -->
+
+####
+Oh great! Just what we needed - yet another UI for locally deployed models... BUT this time it's for your **Agents!** How thrilling.
+
+
+### What’s the deal?  
+- Build your AI Agents as fancy graphs with the oh-so-powerful [Langgraph](https://python.langchain.com/docs/langgraph).  
+- Pair it with a super lightweight, crystal-clear UI! Forget bloated npm packages and convoluted JavaScript frameworks. Nope, this beauty runs on clean Python and [FastAPI](https://fastapi.tiangolo.com/) for the back-end, while the front-end rocks HTML, [HTMX](https://htmx.org/), and [Tailwind CSS](https://tailwindcss.com/). Oh, and a sprinkle of vanilla JS—because who doesn’t love a bit of extra fun?  
+- Customize the UI for your Agents’ output—go wild! Use the MIT-licensed code to implement whatever your heart desires or play around predefined tools and pretty simple Jinja templates and HTML to render your Agent's inner workings.  
+
+
+### Why does this even exist?  
+Honestly? This project came to life to dodge the *joys* of Gradio or Streamlit integration. It’s a quick-and-dirty code base for prototyping agentic solutions without those pesky limitations. If you’re an AI dev like me, who prefers to avoid the murky waters of web development, you might actually find this pretty useful.  
+
+Oh, and contributions? Yes, please. Toxic comments? Even better—bring them on. 
+
+### How does it work? 
+
+.....
+
+### The project in an intensive development phase. 
+
+####
+
+- [HTMX](https://htmx.org/)
+- [FastAPI](https://fastapi.tiangolo.com/)
+- [Langchain](https://python.langchain.com/docs/get_started/introduction)
+- [Langgraph](https://python.langchain.com/docs/langgraph)
+- [Llama.cpp](https://github.com/ggerganov/llama.cpp)
+- [Ollama](https://github.com/ollama/ollama)
+- [vLLM](https://github.com/vllm-project/vllm)
 
 The project in an intensive development phase. 
+
+
+## Features
+
 Here's what you need to do to get your environment set up and get started:
 
 ## Setup Conda Environment with Python 3.11

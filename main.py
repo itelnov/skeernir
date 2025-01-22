@@ -830,6 +830,12 @@ async def stream_endpoint(
         media_type="text/event-stream"
         )
 
+# @app.get("/ascii-content")
+# def ascii_content():
+#     with open('templates/skeernir.txt') as file:
+#         text_content = file.read()
+#     return {'ascii_content': text_content}
+
 
 if __name__ == '__main__':
     

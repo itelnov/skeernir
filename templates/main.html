@@ -3,69 +3,87 @@
 {% block title %}Main Page{% endblock %}
 {% block content %}
 
-<div id="main_chat" class="bg-gray-800 rounded-md p-1" data-session-id="{{ session_id }}">
+<div id="main_chat" class="bg-gray-800 rounded-md" data-session-id="{{ session_id }}">
     <div class="flex flex-row justify-end">
-        <div class="flex flex-col px-4 py-2">
-            <p class="p-1 px-10 rounded-lg hover:bg-gray-700"> 
-                {{ user + " Space" }} 
-            </p>
-        </div>
-        <div class="flex flex-col px-4 py-2">
-            <div class="">
-                <button hx-post="/logout"
-                        hx-target="#main_chat"
-                        hx-redirect="/"
-                        hx-swap="outerHTML"
+        <div></div>
+    </div>
+    <div class="flex flex-row h-[calc(100vh-80px)] overflow-hidden rounded-md mb-2 mt-6">
+        <div id="dock" class="flex flex-col w-12 bg-gray-950">
+            <div id="high-dock" class="flex flex-col justify-start">
+                <div class="flex flex-row justify-center py-2">
+                    <button hx-get="/newconv/{{session_id}}"
+                        hx-target="body"
+                        hx-trigger="click"
+                        hx-swap="innerHTML"
                         hx-push-url="true"
-                        type="submit"
-                        class=" bg-red-500 text-white text-center justify-center 
-                            px-2 py-1 rounded-lg hover:bg-red-600 transition-colors">
-                    Sign Out
-                </button>
+                        hx-on::before-request="
+                            const ChatElement = document.getElementById('chat-messages');
+                            ChatElement.classList.add('shine-animation');"
+                        class="new-conv-button p-2 mt-2 rounded-lg">
+                        <svg class="new-conv-icon" fill="none" width="25px" height="25px" viewBox="0 0 32 32">
+                            <path d="M27.2,8.22H23.78V5.42A3.42,3.42,0,0,0,20.36,2H5.42A3.42,3.42,0,0,0,2,5.42V20.36a3.42,3.42,0,0,0,3.42,3.42h2.8V27.2A2.81,2.81,0,0,0,11,30H27.2A2.81,2.81,0,0,0,30,27.2V11A2.81,2.81,0,0,0,27.2,8.22ZM5.42,21.91a1.55,1.55,0,0,1-1.55-1.55V5.42A1.54,1.54,0,0,1,5.42,3.87H20.36a1.55,1.55,0,0,1,1.55,1.55v2.8H11A2.81,2.81,0,0,0,8.22,11V21.91ZM28.13,27.2a.93.93,0,0,1-.93.93H11a.93.93,0,0,1-.93-.93V11a.93.93,0,0,1,.93-.93H27.2a.93.93,0,0,1,.93.93Z" stroke="#FFFFFF" stroke-width="1" fill="#FFFFFF"/>
+                            <path d="M24.09,18.18H20v-4a.93.93,0,1,0-1.86,0v4h-4a.93.93,0,0,0,0,1.86h4v4.05a.93.93,0,1,0,1.86,0V20h4.05a.93.93,0,1,0,0-1.86Z" stroke="#FFFFFF" stroke-width="1" fill="#FFFFFF"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            <div id="low-dock" class="flex flex-col justify-end h-full">
+                <div class="flex flex-row justify-center py-2">
+                    <button hx-get="/user_settings/{{session_id}}"
+                        hx-target="#user_settings"
+                        hx-redirect="/"
+                        hx-swap="innerHTML"
+                        type=""
+                        class="user-button"
+                        hx-on::before-request="
+                            document.getElementById('left-panel').classList.add('left-slide-in');">
+                            <svg class="user-icon" width="25px" height="25px" viewBox="0 0 24 24" fill="none">
+                            <path d="M16.0724 4.02447C15.1063 3.04182 13.7429 2.5 12.152 2.5C10.5611 2.5 9.19773 3.04182 8.23167 4.02447C7.26636 5.00636 6.73644 6.38891 6.73644 8C6.73644 10.169 7.68081 11.567 8.8496 12.4062C9.07675 12.5692 9.3115 12.7107 9.54832 12.8327C8.24215 13.1916 7.18158 13.8173 6.31809 14.5934C4.95272 15.8205 4.10647 17.3993 3.53633 18.813C3.43305 19.0691 3.55693 19.3604 3.81304 19.4637C4.06914 19.567 4.36047 19.4431 4.46375 19.187C5.00642 17.8414 5.78146 16.4202 6.98653 15.3371C8.1795 14.265 9.82009 13.5 12.152 13.5C14.332 13.5 15.9058 14.1685 17.074 15.1279C18.252 16.0953 19.0453 17.3816 19.6137 18.6532C19.9929 19.5016 19.3274 20.5 18.2827 20.5H6.74488C6.46874 20.5 6.24488 20.7239 6.24488 21C6.24488 21.2761 6.46874 21.5 6.74488 21.5H18.2827C19.9348 21.5 21.2479 19.8588 20.5267 18.2452C19.9232 16.8952 19.0504 15.4569 17.7087 14.3551C16.9123 13.7011 15.9603 13.1737 14.8203 12.8507C15.43 12.5136 15.9312 12.0662 16.33 11.5591C17.1929 10.462 17.5676 9.10016 17.5676 8C17.5676 6.38891 17.0377 5.00636 16.0724 4.02447ZM15.3593 4.72553C16.1144 5.49364 16.5676 6.61109 16.5676 8C16.5676 8.89984 16.2541 10.038 15.544 10.9409C14.8475 11.8265 13.7607 12.5 12.152 12.5C11.5014 12.5 10.3789 12.2731 9.43284 11.5938C8.51251 10.933 7.73644 9.83102 7.73644 8C7.73644 6.61109 8.18963 5.49364 8.94477 4.72553C9.69916 3.95818 10.7935 3.5 12.152 3.5C13.5105 3.5 14.6049 3.95818 15.3593 4.72553Z" stroke="#FFFFFF"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="flex flex-row justify-center py-2">
+                    <button hx-post="/logout"
+                            hx-target="#main_chat"
+                            hx-redirect="/"
+                            hx-swap="outerHTML"
+                            hx-push-url="true"
+                            type="submit"
+                            class="sign-out-button">
+                        <svg class="sign-out-icon" width="25px" height="25px" viewBox="0 0 24 24" fill="none">
+                            <path d="M8.00195 7C8.01406 4.82497 8.11051 3.64706 8.87889 2.87868C9.75757 2 11.1718 2 14.0002 2H15.0002C17.8286 2 19.2429 2 20.1215 2.87868C21.0002 3.75736 21.0002 5.17157 21.0002 8V16C21.0002 18.8284 21.0002 20.2426 20.1215 21.1213C19.2429 22 17.8286 22 15.0002 22H14.0002C11.1718 22 9.75757 22 8.87889 21.1213C8.11051 20.3529 8.01406 19.175 8.00195 17" stroke="#FFFFFF" stroke-width="1.5" stroke-linecap="round"/>
+                            <path d="M8 19.5C5.64298 19.5 4.46447 19.5 3.73223 18.7678C3 18.0355 3 16.857 3 14.5V9.5C3 7.14298 3 5.96447 3.73223 5.23223C4.46447 4.5 5.64298 4.5 8 4.5" stroke="#FFFFFF" stroke-width="1.5"/>
+                            <path d="M15 12L6 12M6 12L8 14M6 12L8 10" stroke="#FFFFFF" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </button>
+                </div>
             </div>
         </div>
-    </div>
-    <div class="flex flex-row h-[calc(100vh-80px)] overflow-hidden rounded-lg mb-2 mt-0">
-        <div id="left-panel" class="flex flex-col w-56 rounded-lg bg-gray-900 pb-4 relative">
-            <div class="flex flex-col mb-2 mt-2 px-2 rounded text-left truncate 
-                        whitespace-nowrap overflow-y-auto text-ellipsis">
+        <div id="user_settings" class="flex bg-gray-500">
+        </div>
+        <div id="left-panel" class="flex flex-col w-56 rounded-r-lg bg-gray-900 relative">
+            <div class="flex flex-col rounded text-left truncate 
+                        whitespace-nowrap overflow-y-auto text-ellipsis p-2">
                 <button
                     id="dropdown-button"
                     type="text"
-                    class="bg-gray-90 w-full p-2 rounded-lg truncate whitespace-nowrap overflow-y-auto text-ellipsis"
+                    class="bg-gray-900 w-full mt-2 mb-4 p-2 truncate whitespace-nowrap overflow-y-auto text-ellipsis"
                     hx-get="/select_graph/{{session_id}}"
                     hx-trigger="input changed delay:200ms, focus"
                     hx-target="#dropdown-menu"
                     hx-swap="innerHTML"
-                    hx-on::before-request="handleGraphSelector();">
+                    hx-on::before-request="
+                        handleGraphSelector();">
                     {{graph}}
                 </button>
                 <div>
                     <div id="dropdown-menu" class="absolute"></div>
                 </div>
             </div>
-            <div class="flex flex-row justify-end">
-                <button hx-get="/newconv/{{session_id}}"
-                    hx-target="body"
-                    hx-trigger="click"
-                    hx-swap="innerHTML"
-                    hx-push-url="true"
-                    hx-on::before-request="
-                        const ChatElement = document.getElementById('chat-messages');
-                        ChatElement.classList.add('shine-animation');
-                    "
-                    class="new-conv-button px-4 py-2 rounded-lg">
-                    <svg class="new-conv-icon" fill="none" width="25px" height="25px" viewBox="0 0 32 32">
-                        <path d="M27.2,8.22H23.78V5.42A3.42,3.42,0,0,0,20.36,2H5.42A3.42,3.42,0,0,0,2,5.42V20.36a3.42,3.42,0,0,0,3.42,3.42h2.8V27.2A2.81,2.81,0,0,0,11,30H27.2A2.81,2.81,0,0,0,30,27.2V11A2.81,2.81,0,0,0,27.2,8.22ZM5.42,21.91a1.55,1.55,0,0,1-1.55-1.55V5.42A1.54,1.54,0,0,1,5.42,3.87H20.36a1.55,1.55,0,0,1,1.55,1.55v2.8H11A2.81,2.81,0,0,0,8.22,11V21.91ZM28.13,27.2a.93.93,0,0,1-.93.93H11a.93.93,0,0,1-.93-.93V11a.93.93,0,0,1,.93-.93H27.2a.93.93,0,0,1,.93.93Z" stroke="#FFFFFF" stroke-width="1" fill="#FFFFFF"/>
-                        <path d="M24.09,18.18H20v-4a.93.93,0,1,0-1.86,0v4h-4a.93.93,0,0,0,0,1.86h4v4.05a.93.93,0,1,0,1.86,0V20h4.05a.93.93,0,1,0,0-1.86Z" stroke="#FFFFFF" stroke-width="1" fill="#FFFFFF"/>
-                    </svg>
-                </button>
-            </div>
             <div class="overflow-y-auto h-full max-h-full text-xs">
                 {{ conversation_list | safe }}
             </div>
         </div>
-
         <div class="flex justify-center w-full px-2 mb-2">
             <div id="chat-container" class="flex flex-col w-full max-w-3xl px-4">
                 <div id="chat-messages" class="overflow-y-auto h-full max-h-full bg-gray-900 rounded-lg shadow-md p-2">

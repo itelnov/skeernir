@@ -8,7 +8,7 @@
     <link href="{{ url_for('static', path='output.css') }}" rel="stylesheet">
     <link href="{{ url_for('static', path='prism.css') }}" rel="stylesheet"/>
 </head>
-<body>             
+<body>
     <div id='mainblock'>
         {% block content %}{% endblock %}
     </div>
@@ -38,6 +38,7 @@
                         this.container = container;
                         this.currentMessage = null;
                         this.currentElement = null;
+                        this.container.addEventListener('scroll', () => this.handleScroll());
                         this.hasUserScrolledUp = false;
                         this.streamState = {
                             mode: 'markdown', // 'markdown' or 'code'
@@ -75,12 +76,6 @@
                             'dockerfile': 'docker',
                             'Dockerfile': 'docker',
                             'asm' : 'armasm'
-                        }
-                    }
-                    // #TODO check the function and run it before stream starts
-                    handleScroll(event) {
-                        if (this.container.scrollTop < this.container.scrollHeight - this.container.clientHeight) {
-                            this.hasUserScrolledUp = true;
                         }
                     }
 
@@ -196,6 +191,15 @@
                         return new_chunk.split("|");
                     }
 
+                    // #TODO check the function and run it before stream starts
+                    handleScroll() {
+                        // Check if user has scrolled up from bottom
+                        const isAtBottom = Math.abs(
+                            this.container.scrollHeight - this.container.scrollTop - this.container.clientHeight
+                        ) < 1;
+                        this.userHasScrolledUp = !isAtBottom;
+                    }
+
                     addChunk(chunk) {
                         this.splitTripleBackticks(chunk).forEach(
                             (element, index) => {
@@ -207,6 +211,7 @@
                             }
                         });
                     }
+
                     processChunk(chunk) {
 
                         this.streamState.accumulatedContent += chunk;
@@ -496,7 +501,11 @@
             }, 300);
         });
     }
-    
+
+    function deleteItem(itemId) {
+        const itemElement = document.getElementById(itemId);
+        itemElement.remove();
+    }
     </script>
 </body>
 </html>

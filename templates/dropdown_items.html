@@ -8,7 +8,12 @@
         hx-target="body"
         hx-on::before-request="
             const ChatElement = document.getElementById('chat-messages');
-            ChatElement.classList.add('shine-animation');">    
+            ChatElement.classList.add('shine-animation');
+            const rightContainer = document.getElementById('right-container');
+            if (rightContainer) {
+                rightContainer.classList.remove('right-slide-in');
+                rightContainer.classList.add('right-slide-out');
+            }">    
         {{ item.name + ": " + item.tag }}
     </button>
     {% endfor %}

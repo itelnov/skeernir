@@ -579,19 +579,6 @@ async def chat(
     if graph_logs_html and session.graph.entries_map:
         right_container_html = RC_TEMPLATE.render(graphlogs=graph_logs_html)
 
-    #TODO recompile using templating and form instead of <select>
-    current_graph = (f'<option class="bg-gray-500 rounded-lg" ' +
-                     f'value="{session.graph.name}">{session.graph.name}: ' + 
-                     f'{session.graph.tag}</option>')
-
-    model_list = []
-    for (name, tag) in GM._graphs_registry.list_graphs():
-        if name == session.graph.name:
-            continue
-        model_list.append(f'<option value="{name}">{name}:{tag}</option>')
-    
-    model_list = ''.join(model_list)
-    
 
     return templates.TemplateResponse(request, "main.html",
         {   
@@ -600,7 +587,6 @@ async def chat(
             "previous_messages": prev_messages_html,
             "conversation_list": prev_convs_html,
             "session_id": session_id,
-            "model_list": current_graph + model_list,
             "right_container": right_container_html
         })
 
@@ -635,6 +621,43 @@ async def get_graphs_list(
             "items": items
         },
     )
+
+
+@app.get("/user_settings/{session_id}", response_class=HTMLResponse)
+async def get_user_details(
+    request: Request,
+    session_id: str,
+    db: Session = Depends(get_db)
+):  
+    user = get_current_user(request, db)
+    if not user:
+        return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
+    
+    return templates.TemplateResponse(request, "user_details.html",
+        {
+            "user": {"name": user.username, "email": user.email},
+            "session_id": session_id,
+         }
+    )
+
+
+@app.delete("/user_settings/{session_id}", response_class=HTMLResponse)
+async def get_user_details(
+    request: Request,
+    session_id: str,
+    db: Session = Depends(get_db)
+):  
+    user = get_current_user(request, db)
+    if not user:
+        return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
+    
+    return templates.TemplateResponse(request, "user_details.html",
+        {
+            "user": {"name": user.username, "email": user.email},
+            "session_id": session_id,
+         }
+    )
+
 
 @app.post("/sendmessage/{session_id}", response_class=JSONResponse)
 async def send_input_message(

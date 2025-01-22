@@ -100,7 +100,7 @@ class MarkdownConverter:
         # Convert markdown to HTML with all extensions
         md = Markdown(extensions=['extra', 'sane_lists'])
 
-        # processed_text = html.escape(processed_text)
+        processed_text = html.escape(processed_text)
         html_output = md.convert(processed_text)
 
         # TODO insirt as a template !!! 

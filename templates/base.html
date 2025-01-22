@@ -77,6 +77,12 @@
                             'Dockerfile': 'docker',
                             'asm' : 'armasm'
                         }
+
+                        // Event listener to detect user scrolling
+                        this.container.addEventListener('scroll', () => {
+                            // Check if the user scrolled up (not at the bottom)
+                            this.isUserScrolling = this.container.scrollHeight - this.container.scrollTop > this.container.clientHeight + 5;
+                        });
                     }
 
                     htmlescape(s, quote = true) {
@@ -190,26 +196,30 @@
                         var new_chunk = chunk.replace(/```/g, "|```");
                         return new_chunk.split("|");
                     }
-
-                    // #TODO check the function and run it before stream starts
-                    handleScroll() {
-                        // Check if user has scrolled up from bottom
-                        const isAtBottom = Math.abs(
-                            this.container.scrollHeight - this.container.scrollTop - this.container.clientHeight
-                        ) < 1;
-                        this.userHasScrolledUp = !isAtBottom;
+                    
+                    startScrollCheck() {
+                        this.container.addEventListener(
+                            'scroll', () => this.handleScroll());
                     }
+
+                    stopScrollCheck() {
+                        this.container.removeEventListener('scroll');
+                        this.userHasScrolledUp = False;
+                    }
+
 
                     addChunk(chunk) {
                         this.splitTripleBackticks(chunk).forEach(
                             (element, index) => {
                             if (element !== "") {
                                 this.processChunk(element);
-                                if (!this.userHasScrolledUp) {
-                                    this.container.scrollTop = this.container.scrollHeight;
+                                // Scroll to the bottom if the user isn't scrolling manually
+                                if (!this.isUserScrolling) {
+                                        this.container.scrollTop = this.container.scrollHeight;
+                                    }
                                 }
                             }
-                        });
+                        );
                     }
 
                     processChunk(chunk) {

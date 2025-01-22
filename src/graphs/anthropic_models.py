@@ -25,7 +25,7 @@ def get_claude(api_token=None, **kwargs):
     model = ChatAnthropic(
         streaming=True,
         api_key=api_token,
-        model="claude-3-haiku-20240307",
+        model="claude-3-5-sonnet-20241022",
         **kwargs)
     
     # Define the function that calls the model

@@ -19,8 +19,8 @@ Oh great! Just what we needed - yet another UI for locally deployed models... BU
 - Customize the UI for your Agents’ output—go wild! Use the MIT-licensed code to implement whatever your heart desires or play around predefined tools and pretty simple Jinja templates to render your Agent's inner workings.  
 
 <div style="text-align: center;">
-    <img src="static/assets/demo1.gif" alt="drawing" width="712"/>
-    <img src="static/assets/demo2.gif" alt="drawing" width="712"/>
+    <img src="static/assets/demo1c.gif" alt="drawing" width="712"/>
+    <img src="static/assets/demo2c.gif" alt="drawing" width="712"/>
 </div>
 
 ### Why does this even exist?  

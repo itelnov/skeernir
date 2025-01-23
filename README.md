@@ -87,7 +87,7 @@ Graph will be available in UI.
 
 #### Find more examples with [Llama.cpp](https://github.com/ggerganov/llama.cpp), [Ollama](https://github.com/ollama/ollama) and [vLLM](https://github.com/vllm-project/vllm) in [src/graphs](src/graphs). 
 
-#### Take a look on [src/graphs/corrective_rag_example.py](src/graphs/corrective_rag_example.py) to integrate Agent's outputs and logs into the Skeernir interface!
+#### Take a look on [src/graphs/corrective_rag/corrective_rag.md](src/graphs/corrective_rag/corrective_rag.md) and[src/graphs/corrective_rag_example.py](src/graphs/corrective_rag_example.py) to integrate Agent's outputs and logs into the Skeernir interface!
 
 :rocket::rocket::rocket: **More ready-to-use Agents and examples coming soon!**
 
@@ -155,7 +155,7 @@ For locally deployed models, refer to the following Python scripts as examples:
 * [src/graphs/llama3_2_vision_11b_on_ollama_server.py](src/graphs/llama3_2_vision_11b_on_ollama_server.py)
 * [src/graphs/phi3_5_mini_instruct_on_llamacpp_server.py](src/graphs/llama3_2_vision_11b_on_ollama_server.py)
 
-and corresponding .json files in [configs](configs)
+and corresponding .json files in [configs](configs). **Don't forget to add your token api into configs!!!** (see [here](#how-does-it-work))
 
 Grab those **GGUF files** (or whatever other format you fancy).  
 Using Ollama? Don’t sweat it—models will magically pull themselves if they’re not already there.  

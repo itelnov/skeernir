@@ -107,7 +107,8 @@ class GradeDocuments(DataBaseModel):
 
 
 class DocumentEntry(BaseEntry):
-    """A Pydantic model representing a document entry that renders HTML output.
+    """A Pydantic model representing a document entry that renders HTML output
+       into Skeernir UI.
     
     The class has immutable type and template attributes, while requiring
     title and page_content for initialization.
@@ -128,7 +129,7 @@ class DocumentEntry(BaseEntry):
 
     def __init__(self, **data):
         super().__init__(**data)
-        # Initialize template after parent initialization
+        # Initialize template
         self._template = templates.get_template("partials/document_log.html")
 
     def _format_content(self) -> dict:
@@ -139,19 +140,29 @@ class DocumentEntry(BaseEntry):
         }
 
     def content_to_send(self) -> str:
-        """Renders the document content using the template.
+        """ Renders the document content using the template.
         
         Returns:
-            str: HTML-rendered content of the document
+            str: HTML-rendered content of the document which will be shown in UI
         """
         return self._template.render(self._format_content())
 
     def content_to_store(self) -> str:
+        """ Prepare data of the item to be stored in DataBase """
+
         return json.dumps(self._format_content())
     
 
 def get_retrival_grader_chain(api_token: str) -> Runnable:
+    """
+    Creates a runnable chain for grading the relevance of retrieved documents.
 
+    Args:
+        api_token (str): OpenAI API token for authentication.
+
+    Returns:
+        Runnable: A chain of operations for grading documents.
+    """
     tool_name = convert_to_openai_tool(GradeDocuments)["function"]["name"]
     llm = ChatOpenAI(
         model="gpt-4o-mini-2024-07-18",
@@ -180,6 +191,16 @@ def get_retrival_grader_chain(api_token: str) -> Runnable:
 
 
 def get_generation_chain(api_token: str) -> Runnable:
+    """
+    Creates a runnable chain for generating text based on the context provided 
+    by documents.
+
+    Args:
+        api_token (str): OpenAI API token for authentication.
+
+    Returns:
+        Runnable: A chain of operations for text generation.
+    """
     llm = ChatOpenAI(
         temperature=0.75,
         model="gpt-4o-mini-2024-07-18",
@@ -190,6 +211,15 @@ def get_generation_chain(api_token: str) -> Runnable:
 
 
 def get_web_search_tool(tavily_api_key: str) -> Runnable:
+    """
+    Creates a runnable tool for performing web search based on a query.
+
+    Args:
+        tavily_api_key (str): Tavily API key for authentication.
+
+    Returns:
+        Runnable: A chain of operations for web search.
+    """
     search = TavilySearchAPIWrapper(
         tavily_api_key=tavily_api_key)
     web_search_tool = TavilySearchResults(api_wrapper=search, max_results=5)
@@ -201,7 +231,17 @@ def get_corrective_rag_graph(
     api_token: str,
     tavily_api_key: str,
     **kwargs) -> StateGraph:
+    """
+    Constructs and returns a StateGraph for the RAG (Retrieval-Generation) pipeline.
 
+    Args:
+        api_token (str): OpenAI API token for authentication.
+        tavily_api_key (str): Tavily API key for web search.
+        **kwargs: Additional configuration parameters.
+
+    Returns:
+        StateGraph: The constructed graph with nodes and edges for the RAG pipeline.
+    """
     # Define our chain and tools
     retriever = Chroma(
         collection_name=kwargs["collection_name"],
@@ -220,6 +260,13 @@ def get_corrective_rag_graph(
         if isinstance(question, List):
             question = question[0]["text"]
         documents = await retriever.ainvoke(question)
+        
+        """ We add `from_graph` into state which is defined as LoggedAttribute 
+        class. During streaming the output from graph, all classes which inherit 
+        from LoggedAttribute class will be considered to log into RIGHT-SIDE 
+        panel. See LoggedAttribute and DocumentEntry class definitions for more 
+        details."""
+        
         return {
             "documents": documents, 
             "messages": question, 
@@ -228,17 +275,14 @@ def get_corrective_rag_graph(
 
     async def run_grade_documents(state: FlowState) -> Dict[str, Any]:
         """
-        Determines whether the retrieved documents are relevant to the question
-        If any document is not relevant, we will set a flag to run web search
+        Grades the retrieved documents for relevance to the question.
 
         Args:
-            state (dict): The current graph state
+            state (FlowState): The current graph state.
 
         Returns:
-            state (dict): Filtered out irrelevant documents and updated 
-                          web_search state
+            dict: Contains filtered documents and web search flag.
         """
-
         question = state["messages"]
         documents = state["documents"]
 
@@ -264,13 +308,20 @@ def get_corrective_rag_graph(
             }
 
     async def run_web_search(state: FlowState) -> Dict[str, Any]:
+        """
+        Performs web search if required.
 
+        Args:
+            state (FlowState): The current graph state.
+
+        Returns:
+            dict: Contains web search results and question.
+        """
         question = state["messages"]
         if isinstance(question, List):
             question = question[0]["text"]
         documents = state["documents"]
         web_docs = await web_search_tool.ainvoke({"query": question})
-        #  Document(page_content="", metadata={'source':"some"})
         if "Exception" in web_docs:
             return {
                 "documents": documents, 
@@ -319,6 +370,10 @@ def get_corrective_rag_graph(
         generation = await generation_chain.ainvoke(
             {"context": documents, "question": question})
         
+        """ Here we add documents as instances of DocumentEntry class
+        This class defines how our data would be saved in database and 
+        how it will be rendered in UI """
+
         log_items = ["Answer generated based on documents:"]
         for doc in documents:
             log_items.append(DocumentEntry(

@@ -16,8 +16,11 @@ from fastapi import (
     status
     )
 from starlette.middleware.sessions import SessionMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
-from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import (HTMLResponse, 
+                               RedirectResponse, 
+                               StreamingResponse, 
+                               JSONResponse, 
+                               FileResponse)
 from fastapi.templating import Jinja2Templates
 from fastapi.security import HTTPBasic
 from fastapi.middleware.cors import CORSMiddleware
@@ -316,6 +319,11 @@ def create_graphlog_record(
     )
 
     return graphlog_item
+
+
+@app.get('/favicon.ico', include_in_schema=False)
+async def favicon():
+    return FileResponse('favicon-32x32.png')
 
 
 @app.get("/", response_class=RedirectResponse)
@@ -829,6 +837,12 @@ async def stream_endpoint(
         stream_generator(session_id),
         media_type="text/event-stream"
         )
+
+# @app.get("/ascii-content")
+# def ascii_content():
+#     with open('templates/skeernir.txt') as file:
+#         text_content = file.read()
+#     return {'ascii_content': text_content}
 
 
 if __name__ == '__main__':

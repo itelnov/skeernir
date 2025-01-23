@@ -109,7 +109,7 @@ def tool_graph(
     :param name: User-friendly name for the graph
     :param tag: Tag for categorizing the graph
     :param att_modals: Type of modal
-    :param entries_map: Optional mapping of entries
+    :param entries_map: Available for agent outputs.
     :return: Decorator function that tracks processes, threads and metadata
     """
     def decorator(func: Callable) -> Callable:

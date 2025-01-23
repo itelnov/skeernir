@@ -30,13 +30,17 @@ def get_phi3_5_on_llamacpp_server(
     model_name = os.path.basename(model_path)
     port = kwargs.pop("port", 8085)
     graph_server_process = None
-    graph_server_process = run_server(
-        server,
-        model_path,
-        port=port, 
-        use_gpu=use_gpu, 
-        **kwargs)
-
+    try:
+        graph_server_process = run_server(
+            server,
+            model_path,
+            port=port, 
+            use_gpu=use_gpu, 
+            **kwargs)
+    except Exception as e:
+        logging.error(f"Graph failed to start:\n{e}")
+        raise 
+    
     model = LlamaCppClient(
         base_url=f'http://127.0.0.1:{port}')
 
@@ -44,8 +48,8 @@ def get_phi3_5_on_llamacpp_server(
         try:
             terminate_processes([graph_server_process])
         except Exception as e:
-            logging.error(f"Graph {e} failed to start")
-            return 
+            logging.error(f"Graph failed to start:\n\n{e}")
+            raise 
 
     sampling_data = kwargs.get("sampling")
     # Define the function that calls the model

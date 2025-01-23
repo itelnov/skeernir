@@ -52,8 +52,8 @@ def get_llava_34b_on_ollama_server(
             try:
                 terminate_processes([graph_server_process])
             except Exception as e:
-                logging.error(f"Graph {e} failed to start")
-                return 
+                logging.error(f"Graph failed to start: \n{e}")
+                raise 
             
         logging.info("Start pull if will be needed")
         pull_process = subprocess.Popen(

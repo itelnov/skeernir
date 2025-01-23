@@ -133,6 +133,8 @@ def tool_graph(
             # Execute the function
 
             results = func(*args, **kwargs)
+            if not results:
+                return
             if not isinstance(results, (tuple, list)):
                 results = (results,)
             new_processes = []

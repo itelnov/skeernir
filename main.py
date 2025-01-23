@@ -52,7 +52,8 @@ SMH = AsyncMessageStreamHandler()
 ENTRY_TYPE_REGISTRY = get_entry_type_registry()
 
 # Database setup
-SQLALCHEMY_DATABASE_URL = os.environ["SQLALCHEMY_DATABASE_URL"]
+SQLALCHEMY_DATABASE_URL = os.environ.get(
+    "SQLALCHEMY_DATABASE_URL", "sqlite:///./chat.db")
 engine = create_engine(SQLALCHEMY_DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 # Execute the VACUUM command
@@ -112,13 +113,14 @@ security = HTTPBasic()
 # Add session middleware
 app.add_middleware(
     SessionMiddleware,
-    secret_key="your-secret-key-here",
+    secret_key=os.environ.get("SECRET_KEY", "your-secret-key-here"),
     session_cookie="chat_session"
 )
 
+PORT = os.environ.get("SKEERNIR_PORT", "8899")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[f"http://localhost:{os.environ['SKEERNIR_PORT']}"],
+    allow_origins=[f"http://localhost:{PORT}"],
     allow_credentials=True,
     allow_methods=["GET", "POST"],
     allow_headers=["*"]
@@ -838,12 +840,6 @@ async def stream_endpoint(
         media_type="text/event-stream"
         )
 
-# @app.get("/ascii-content")
-# def ascii_content():
-#     with open('templates/skeernir.txt') as file:
-#         text_content = file.read()
-#     return {'ascii_content': text_content}
-
 
 if __name__ == '__main__':
     
@@ -855,7 +851,7 @@ if __name__ == '__main__':
         uvicorn.run(
             app, 
             host="localhost", 
-            port=int(os.environ["SKEERNIR_PORT"]),
+            port=int(PORT),
             loop="asyncio",
             log_level="info",
             access_log=True,

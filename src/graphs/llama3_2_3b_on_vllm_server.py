@@ -1,6 +1,7 @@
 # https://langchain-ai.github.io/langgraph/how-tos/memory/manage-conversation-history/#build-the-agent
 import sys
 import os
+import logging
 from uuid import uuid4
 from langgraph.graph import MessagesState, StateGraph, START, END
 from openai import OpenAI
@@ -16,7 +17,7 @@ from src.graphs.utils import (
     OpenAICompatibleChatModel, run_server, check_server_healthy)
 
 
-# @tool_graph(name='llama3_2_3b_on_vllm_server', tag="chat", att_modals=['text'])
+@tool_graph(name='llama3_2_3b_on_vllm_server', tag="chat", att_modals=['text'])
 def get_llama3_2_b3_on_vllm_server(
     server: str,
     model_path: str,
@@ -26,12 +27,16 @@ def get_llama3_2_b3_on_vllm_server(
     model_name = os.path.basename(model_path)
     port = kwargs.pop("port", 8083)
     graph_model_process = None
-    graph_server_process = run_server(
-        server=server,
-        model_path=model_path,
-        port=port, 
-        use_gpu=use_gpu, 
-        **kwargs)
+    try:
+        graph_server_process = run_server(
+            server=server,
+            model_path=model_path,
+            port=port, 
+            use_gpu=use_gpu, 
+            **kwargs)
+    except Exception as e:
+        logging.error(f"Graph failed to start:\n{e}")
+        raise 
 
     client = OpenAI(
         base_url=f"http://0.0.0.0:{port}/v1",
@@ -41,7 +46,8 @@ def get_llama3_2_b3_on_vllm_server(
         try:
             terminate_processes([graph_server_process])
         except Exception as e:
-            print(e)
+            logging.error(f"Graph failed to start:\n\n{e}")
+            raise
 
     memory = MemorySaver()
 

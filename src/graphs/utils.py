@@ -23,6 +23,14 @@ from src.registry import GraphManager
 from src.entry import LoggedAttribute
 
 
+class LlamacppException(Exception):
+  pass
+
+
+class vLLMException(Exception):
+  pass
+
+
 def run_server(
     server: Literal["llamacpp", "vllm", "ollama"],
     model_path: str,
@@ -35,6 +43,11 @@ def run_server(
     """
     """
     if server == "llamacpp":
+        llamacpp_path = os.environ.get("LLAMA_CPP_PATH", None)
+        if not llamacpp_path:
+            raise LlamacppException(
+                "LLAMA_CPP_PATH was not found. Check .env file and README.md for details")
+        
         executable = os.path.normpath(
             os.environ["LLAMA_CPP_PATH"] + "llama-server")
         cmd = [executable]
@@ -51,8 +64,11 @@ def run_server(
         arguments.append("--no-webui")
     
     elif server == "vllm":
-        cmd = [os.environ["VLLM_PATH"],  "serve"]
-        # cmd = [executable]
+        vllm_path = os.environ.get("VLLM_PATH", None)
+        if not vllm_path:
+            raise vLLMException(
+                "VLLM_PATH was not found. Check .env file and README.md for details")
+        cmd = [vllm_path,  "serve"]
         arguments = [
             model_path,
             "--port", str(port)

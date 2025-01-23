@@ -101,10 +101,11 @@ Graph will be available in UI.
 from attachments
 
 ## TODO
-- More Agents
-- Video processing
+- More Agents! (Presentation Maker and Helper for this repo)
+- Video in attachments
 - Speach-to-text
 - Text-to-speach
+- Documentation
 
 ## Installation
 
@@ -159,7 +160,14 @@ and corresponding .json files in [configs](configs)
 Grab those **GGUF files** (or whatever other format you fancy).  
 Using Ollama? Don’t sweat it—models will magically pull themselves if they’re not already there.  
 
+**Finally, create .env with next environment variables:**
 
+```.env
+SKEERNIR_PORT = "<port you prefer>"
+LLAMA_CPP_PATH = "<your path to llama.cpp bin >/llama.cpp/build/bin/"
+VLLM_PATH = "<your path to vllm>
+SQLALCHEMY_DATABASE_URL = "sqlite:///./chat.db" # if db located in project root or change according your needs
+```
 
 Run 
 
@@ -171,6 +179,19 @@ How you deploy or configure your clients for APIs is totally on you. Want to run
 
 **Heads up:** This project isn’t here to hold your hand with deploying AI models locally. Nope, it’s laser-focused on your **Agents** and UI to work with them. So, if you’re into that, welcome aboard!  
 
+### Project depends on
+- [Langchain](https://github.com/langchain-ai/langchain)
+- [Langgraph](https://python.langchain.com/docs/langgraph)
+- [FastAPI](https://fastapi.tiangolo.com/)
+- [HTMX](https://htmx.org/)
+- [Tailwind CSS](https://tailwindcss.com/)
+- [Prism](https://github.com/PrismJS/prism?tab=readme-ov-file)
+- [MarkItDown](https://github.com/microsoft/markitdown)
+- [Sqlalchemy](https://www.sqlalchemy.org/)
 
+... 
 
-
+and off course such projects like:
+- [Llama.cpp](https://github.com/ggerganov/llama.cpp)
+- [Ollama](https://github.com/ollama/ollama)
+- [vLLM](https://github.com/vllm-project/vllm)

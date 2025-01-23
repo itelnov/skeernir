@@ -1,0 +1,521 @@
+<!-- templates/base.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}{% endblock %}</title>
+    <link href="{{ url_for('static', path='output.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', path='prism.css') }}" rel="stylesheet"/>
+</head>
+<body>
+    <div id='mainblock'>
+        {% block content %}{% endblock %}
+    </div>
+    <script src="{{ url_for('static', path='htmx.min.js') }}"></script>
+    <script src="{{ url_for('static', path='marked.min.js') }}"></script>
+    <script src="{{ url_for('static', path='prism.js') }}"></script>
+    <script>
+
+        Prism.plugins.NormalizeWhitespace.setDefaults({
+            'remove-trailing': true,
+            'remove-indent': true,
+            'left-trim': true,
+            'right-trim': true,
+        });
+        
+        function sleep(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+        
+        function getConverter() {
+
+            if (typeof MarkdownConverter === 'undefined') {
+
+                class MarkdownConverter {
+
+                    constructor(container) {
+                        this.container = container;
+                        this.currentMessage = null;
+                        this.currentElement = null;
+                        this.container.addEventListener('scroll', () => this.handleScroll());
+                        this.hasUserScrolledUp = false;
+                        this.streamState = {
+                            mode: 'markdown', // 'markdown' or 'code'
+                            codeLanguage: null,
+                            accumulatedContent: ''
+                        };
+                        console.log('MarkdownConverter instance created')
+                        this.lang_map = {
+                            'py': 'Python',
+                            'js': 'JavaScript',
+                            'ts': 'TypeScript',
+                            'html': 'HTML',
+                            'css': 'CSS',
+                            'java': 'Java',
+                            'cpp': 'cpp',
+                            'C++': 'cpp',
+                            'c': 'c',
+                            'cs': 'C#',
+                            'go': 'Go',
+                            'rust': 'Rust',
+                            'rb': 'Ruby',
+                            'php': 'PHP',
+                            'swift': 'Swift',
+                            'kotlin': 'Kotlin',
+                            'plaintext': 'Plain Text',
+                            'txt': 'Plain Text',
+                            'shell': 'Shell',
+                            'bash': 'Bash',
+                            'sql': 'SQL',
+                            'json': 'JSON',
+                            'xml': 'XML',
+                            'yaml': 'YAML',
+                            'markdown': 'Markdown',
+                            'md': 'Markdown',
+                            'dockerfile': 'docker',
+                            'Dockerfile': 'docker',
+                            'asm' : 'armasm'
+                        }
+
+                        // Event listener to detect user scrolling
+                        this.container.addEventListener('scroll', () => {
+                            // Check if the user scrolled up (not at the bottom)
+                            this.isUserScrolling = this.container.scrollHeight - this.container.scrollTop > this.container.clientHeight + 5;
+                        });
+                    }
+
+                    htmlescape(s, quote = true) {
+                        /**
+                         * Replace special characters "&", "<" and ">" to 
+                         * HTML-safe sequences.
+                         * If the optional flag quote is true (the default), 
+                         * the quotation mark characters, both double quote (") 
+                         * and single quote (') characters are also translated.
+                         */
+                        // Must replace & first to avoid double-escaping other 
+                        // entities
+                        s = s.replace(/&/g, "&amp;");
+                        s = s.replace(/</g, "&lt;");
+                        s = s.replace(/>/g, "&gt;");
+                        
+                        if (quote) {
+                            s = s.replace(/"/g, "&quot;");
+                            s = s.replace(/'/g, "&#x27;");
+                        }
+                        
+                        return s;
+                    }
+
+                    getCodeHeader(lang_display) {
+                        // TODO Use template code_block.html for this
+                        // Create main div
+                        const mainDiv = document.createElement('div');
+                        mainDiv.className = 'flex justify-between' + 
+                                            'items-center bg-gray-700';
+
+                        // Create span
+                        const span = document.createElement('span');
+                        span.className = 'text-sm px-3 py-1 font-semibold' +
+                                         'text-gray-50';
+                        span.textContent = lang_display;
+
+                        // Create button
+                        const button = document.createElement('button');
+                        button.className = 'px-3 py-1 m-0 text-sm rounded ' +
+                                           'bg-gray-700 hover:bg-gray-600 ' + 
+                                           'hover:text-gray-900 ' +
+                                           'focus:ring-blue-500';
+
+                        button.textContent = 'Copy';
+                        button.setAttribute('onclick', 'copyText(this)');
+
+                        // Append children
+                        mainDiv.appendChild(span);
+                        mainDiv.appendChild(button);
+
+                        return mainDiv;
+                    }
+
+                    addStreamMessage(template) {
+
+                        // Create message container
+                        const temp = document.createElement('div');
+                        temp.innerHTML = template['content'].replace(/\s+/g, ' ');
+
+                        this.currentMessage = temp.firstElementChild;
+                        this.container.appendChild(this.currentMessage);
+                        
+                        this.currentElement = this.currentMessage.querySelector(
+                            'div:not(:has(div))');
+                        this.currentParent = this.currentElement
+
+                        // Reset stream state
+                        this.streamState = {
+                            mode: 'markdown',
+                            codeLanguage: null,
+                            accumulatedContent: ''
+                        };
+
+                        return this.currentMessage;
+                    }
+
+                    addMessage(template) {
+                        const temp = document.createElement('div');
+                        temp.innerHTML = template['content'];
+                        this.currentMessage = temp.firstElementChild;
+                        this.container.appendChild(this.currentMessage);
+                    }
+
+                    addAgentLog(logMessage) {
+                        const target = document.getElementById(
+                            'right-container');
+                        if (!target) {
+                            throw new Error('Target container not found');
+                        }
+
+                        const logDiv = document.createElement('div');
+                        const { content: logItem } = logMessage;
+                        const { Node: node } = logMessage;
+                        logDiv.innerHTML = `${node}: ${logItem}`;
+                        target.appendChild(logDiv);
+                        target.scrollTop = target.scrollHeight;
+
+                    }
+
+                    checkCodeBlock() {
+                        // Modified regex to return null if no code block is found
+                        const regex = /```(\w+)(?:\n|$)/;
+                        const match = this.streamState.accumulatedContent.match(
+                            regex);
+                        // If no match or no capture group, return null
+                        return match ? (match[1] || null) : null;
+                    }
+
+                    splitTripleBackticks(chunk) {
+                        var new_chunk = chunk.replace(/```/g, "|```");
+                        return new_chunk.split("|");
+                    }
+                    
+                    startScrollCheck() {
+                        this.container.addEventListener(
+                            'scroll', () => this.handleScroll());
+                    }
+
+                    stopScrollCheck() {
+                        this.container.removeEventListener('scroll');
+                        this.userHasScrolledUp = False;
+                    }
+
+
+                    addChunk(chunk) {
+                        this.splitTripleBackticks(chunk).forEach(
+                            (element, index) => {
+                            if (element !== "") {
+                                this.processChunk(element);
+                                // Scroll to the bottom if the user isn't scrolling manually
+                                if (!this.isUserScrolling) {
+                                        this.container.scrollTop = this.container.scrollHeight;
+                                    }
+                                }
+                            }
+                        );
+                    }
+
+                    processChunk(chunk) {
+
+                        this.streamState.accumulatedContent += chunk;
+
+                        if (this.streamState.mode === 'markdown') {
+                            // Check for code block end
+                            var lang = this.checkCodeBlock();
+                        
+                            if (lang != null) {
+                                
+                                // clean ``` from last text element
+                                let result = this.streamState.accumulatedContent.split("```" + lang)
+                                const parsed = marked.parse(result.slice(0, -1).join(""));
+                                this.currentElement.innerHTML = parsed;
+                                // Switch to code block mode
+                                this.streamState.mode = 'code';
+                                lang = this.lang_map[lang] || lang;
+                                this.streamState.codeLanguage = lang;
+                                
+                                // Create code block elements
+                                const SnipElement = document.createElement('div');
+                                SnipElement.className = 'codeblock rounded-lg overflow-hidden my-1 p-0';
+                                const head_element = this.getCodeHeader(lang);
+                                const preElement = document.createElement('pre');
+                                const codeElement = document.createElement('code');
+                                codeElement.className = `lang-${lang}`;
+                                preElement.appendChild(codeElement);
+                                SnipElement.appendChild(head_element);
+                                SnipElement.appendChild(preElement);
+                                
+                                // Append to current message and set as current 
+                                // element
+                                this.currentParent.appendChild(SnipElement);
+                                this.currentElement = codeElement;
+                                
+                                // Reset accumulated content and add everything and `lang` if exists 
+                                this.streamState.accumulatedContent = result.at(-1);
+                                return;
+
+                            } else {
+
+                                // Render markdown chunk
+                                const parsed = marked.parse(
+                                    this.streamState.accumulatedContent);
+                                this.currentElement.innerHTML = parsed;
+                                // this.container.scrollTop = this.container.scrollHeight;
+                            }
+                            return;
+                        
+                        } else if (this.streamState.mode === 'code') {
+
+                            // Check for code block end or continue
+                            const content = this.streamState.accumulatedContent.trim()
+                            const endoftheblockA = content.match(/```(?:\s+|$)/);
+                            const endoftheblockB = content.match(/^```/m);
+                            
+                            //if (endoftheblock != null) {
+                            if (endoftheblockA && endoftheblockB)  {
+                                // clean last update of the block
+                                let blockcontent = this.splitTripleBackticks(
+                                    this.streamState.accumulatedContent.trim())
+
+                                this.currentElement.innerHTML = this.htmlescape(
+                                    blockcontent.slice(0, -1).join(""));
+
+                                // Highlight the code block
+                                try {
+                                    Prism.highlightElement(this.currentElement);
+                                } catch (e) {
+                                    console.warn('Highlighting failed:', e);
+                                }
+
+                                // Switch back to markdown mode
+                                this.streamState.mode = 'markdown';
+                                const newElement = document.createElement('div');
+                                this.currentParent.appendChild(newElement);
+                                this.currentElement = newElement;
+                                 // Reset accumulated content
+                                this.streamState.accumulatedContent = blockcontent.at(-1).replace("```", "");
+                                return;
+
+                            } else {
+                            
+                                // Accumulate code block content
+                                const parsed = this.htmlescape(
+                                    this.streamState.accumulatedContent);
+                                this.currentElement.innerHTML = parsed;
+                                // Highlight the code block
+                                try {
+                                    Prism.highlightElement(this.currentElement);
+                                } catch (e) {
+                                    console.warn('Highlighting failed:', e);
+                                }
+                            }
+                            return;
+
+                        }
+                    }
+                }
+                return MarkdownConverter;
+
+            } else {
+
+                return MarkdownConverter;
+            }
+        }
+        
+        function StartStream() {
+
+            return new Promise((resolve, reject) => {
+                try {
+                    const mainChat = document.getElementById('main_chat');
+                        if (!mainChat) {
+                            throw new Error('Main chat element not found');
+                        }
+
+                    const sessionId = mainChat.getAttribute('data-session-id');
+                        if (!sessionId) {
+                            throw new Error('Session ID not found');
+                        }
+                
+                    const container = document.getElementById('chat-messages');
+                    const converterClass = getConverter();
+                    const streamer = new converterClass(container);
+                    const eventSource = new EventSource(`/stream/${sessionId}`);
+
+                    eventSource.addEventListener(
+                        'user_message', function (event) {
+                            const template = JSON.parse(event.data);
+                            streamer.addMessage(template);
+                    });
+                    
+                    eventSource.addEventListener(
+                        'chunk_template', function (event) {
+                            const template = JSON.parse(event.data);
+                            streamer.addStreamMessage(template);
+                    });
+
+                    eventSource.addEventListener(
+                        'agent_log', function (event) {
+                            const template = JSON.parse(event.data);
+                            streamer.addAgentLog(template);
+                    });
+
+                    eventSource.onmessage = (event) => {
+                        try {
+                            let chunk = JSON.parse(event.data);
+                            streamer.addChunk(chunk['content'])
+
+                        } catch (error) {
+                            console.error('Error processing message:', error);
+                            eventSource.close();
+                            delete streamer;
+                            reject(error);
+                        }
+                    };
+
+                    eventSource.addEventListener('streamend', function (event) {
+                        eventSource.close();
+                        console.log('Stream connection closed');
+                        resolve();
+                        delete streamer;
+                        return;
+                    });
+
+                    eventSource.addEventListener('sys_warning', function (event) {
+                        const template = JSON.parse(event.data);
+                        streamer.addMessage(template);
+                        return;
+                    });
+
+                    // Handle errors
+                    eventSource.onerror = (error) => {
+                        console.error('EventSource failed:', error);
+                        eventSource.close();
+                        delete streamer;
+                        reject(error);
+                    };
+
+                    // Handle successful connection
+                    eventSource.onopen = () => {
+                        console.log('Stream connection established');
+                    };               
+
+                } catch (error) {
+                    console.error('Failed to start stream:', error);
+                    reject(error);
+                }
+            });
+        }
+
+        function copyText(button) {
+            // Find the parent container of the button
+            const codeElement = button.closest('.codeblock');
+            
+            if (codeElement) {
+                // Get the text content inside the <code> tag
+                const codeText = codeElement.querySelector('code').textContent;
+                // Copy the text content to the clipboard
+                navigator.clipboard.writeText(codeText);
+            } else {
+                console.log('No <code> tag found for the given element.');
+            }
+        }
+
+        function removeFileFromFileList(index, doc_id) {
+            const dt = new DataTransfer();
+            const input = document.getElementById(doc_id);
+            const { files } = input;
+            
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                if (index !== i) {
+                dt.items.add(file); 
+                }
+            }
+            input.files = dt.files;
+        }
+
+        function updateFileList(fileInput) {
+            const fileListContainer = document.getElementById('file-list');
+            
+            // Clear previous content
+            fileListContainer.innerHTML = '';
+            
+            // If no files selected
+            if (fileInput.files.length === 0) {
+                const noFilesDiv = document.createElement('div');
+                noFilesDiv.className = 'text-sm text-gray-500';
+                noFilesDiv.textContent = 'No files attached';
+                fileListContainer.appendChild(noFilesDiv);
+                return;
+            }
+            
+            // Create a container for file names
+            const fileNamesList = document.createElement('div');
+            fileNamesList.className = 'space-y-1';
+            
+            // Add each file name
+            Array.from(fileInput.files).map((file, index) => {
+                const fileItemDiv = document.createElement('div');
+                fileItemDiv.className = "flex flex-row";
+
+                const delbutton = document.createElement('button');
+                delbutton.className = "att-del-button px-1 py-1 bg-gray-500 " +
+                                      "text-white rounded hover:bg-gray-700";
+                const file_name = file.name
+                delbutton.onclick = function() {
+                    fileItemDiv.remove();
+                    const i = index
+                    removeFileFromFileList(i, 'files-attached')
+                };
+
+                delbutton.innerHTML = '&times;'; // Unicode multi
+                fileItemDiv.appendChild(delbutton);
+                
+                const fileNameDiv = document.createElement('div');
+                fileNameDiv.className = 'text-sm text-white truncate' + 
+                                        'w-full mx-2 truncate whitespace-nowrap overflow-hidden text-ellipsis';
+                fileNameDiv.textContent = file.name;
+                fileItemDiv.appendChild(fileNameDiv);
+
+                fileNamesList.append(fileItemDiv);
+            });
+            
+            fileListContainer.appendChild(fileNamesList);
+        }
+    
+        function handleGraphSelector() {
+            // Show dropdown when hovering over the button or dropdown
+            const dropdownButton = document.getElementById('dropdown-button');
+            const dropdownMenu = document.getElementById('dropdown-menu');
+
+            dropdownButton.addEventListener('mouseenter', () => {
+            dropdownMenu.classList.remove('hidden');
+            });
+
+            dropdownMenu.addEventListener('mouseleave', () => {
+            dropdownMenu.classList.add('hidden');
+            });
+
+            dropdownButton.addEventListener('mouseleave', () => {
+                setTimeout(() => {
+                    if (!dropdownMenu.matches(':hover')) {
+                    dropdownMenu.classList.add('hidden');
+                    }
+                }, 300);
+            });
+        }
+
+        function deleteItem(itemId) {
+            const itemElement = document.getElementById(itemId);
+            itemElement.remove();
+        }
+    </script>
+</body>
+</html>

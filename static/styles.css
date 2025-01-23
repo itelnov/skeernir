@@ -1,0 +1,213 @@
+/* static/css/style.css */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+
+/* ---------------- MAIN ----------------------------------------------------*/
+
+body.preload {
+    visibility: hidden;
+}
+
+:root {
+    --bg-color: #1a1a1a;
+    --text-color: #ffffff;
+    --input-bg: #374151;
+    --input-border: #4b5563;
+}
+
+body {
+    background-color: var(--bg-color);
+    color: var(--text-color);
+}
+
+input, textarea {
+    background-color: var(--input-bg);
+    border-color: var(--input-border);
+}
+
+.transition-colors {
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+
+/* ---------------- TODO real list handling  --------------------------------*/
+ul {
+    list-style-type: disc;
+    padding-left: 10px;
+}
+
+ol {
+    list-style-type: decimal;
+    padding-left: 10px;
+}
+
+
+/* ---------------- SCROLLBAR -----------------------------------------------*/
+* {
+    scrollbar-color: #4b5563 #1f2937; /* For Firefox */
+  }
+  
+*::-webkit-scrollbar-track {
+    background: #1f2937;
+  }
+  
+*::-webkit-scrollbar-thumb {
+    background: #4b5563;
+  }
+  
+*::-webkit-scrollbar-thumb:hover {
+    background: #6b7280;
+  }
+
+/* For Webkit-based browsers (Chrome, Safari and Opera) */
+.scrollbar-hide::-webkit-scrollbar {
+    display: none;
+}
+
+/* For IE, Edge and Firefox */
+.scrollbar-hide {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+}
+
+/* ---------------- BUTTONS --------------------------------------------------*/
+.conv-del-button {
+    display: none;
+}
+
+.conv:hover .conv-del-button {
+    display: block;
+}
+
+.conv-del-button:hover .del-icon path {
+    stroke: red;
+}
+
+.new-conv-button:hover .new-conv-icon path {
+    stroke: rgba(128, 128, 233, 0.9);
+    fill: rgba(128, 128, 233, 0.9);
+}
+
+.sign-out-button:hover .sign-out-icon path {
+    stroke: rgba(128, 128, 233, 0.9);
+}
+
+.user-button:hover .user-icon path {
+    stroke: rgba(128, 128, 233, 0.9);
+}
+
+/* ---------------- CHAT ----------------------------------------------------*/
+.user-message {
+    text-wrap: pretty !important;
+    overflow: hidden;
+}
+
+pre[class*=language-] {
+   --tw-bg-opacity: 1;
+    background-color: rgb(2 6 23 / var(--tw-bg-opacity)) !important;
+}
+.code-toolbar {
+    margin: 0 !important;
+}
+
+pre[class*=language-] {
+    border-radius: 0 0 0.5rem 0.5rem !important;
+    padding-left: 2 !important;
+    padding-right: 2 !important;
+    padding-top: 5 !important;
+    padding-bottom: 5 !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    margin: 0 !important;
+    text-wrap: pretty !important;
+}
+
+pre[class*=language-] > code {
+    padding: 0 !important;
+    font-size: 0.8em !important;
+    text-wrap: pretty !important;
+}
+
+
+@keyframes shine {
+    0% {
+        background-position: -100%;
+    }
+    100% {
+        background-position: 100%;
+    }
+    200% {
+        background: rgb(17, 24, 39); /* End with solid color */
+    }
+}
+
+.shine-animation {
+    background: linear-gradient(
+        90deg, rgba(190, 119, 238, 0.3), rgba(17, 24, 39, 0.6), rgba(115, 230, 214, 0.3));
+    background-size: 200% 100%;
+    animation: shine 1s infinite alternate;
+}
+
+
+@keyframes left-slideIn {
+    0% {
+        transform: translateX(-100%);
+        opacity: 0;
+    }
+    100% {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+.left-slide-in {
+    animation: left-slideIn 0.5s ease-in-out forwards;
+}
+
+@keyframes left-slideOut {
+    0% {
+        transform: translateX(-100%);
+    }
+    100% {
+        transform: translateX(0);
+    }
+}
+
+.left-slide-out {
+    animation: left-slideOut 0.5s ease-in-out forwards;
+}
+
+
+
+
+
+@keyframes right-slideIn {
+    0% {
+      transform: translateX(100%);
+      opacity: 0;
+    }
+    100% {
+      transform: translateX(0);
+      opacity: 1;
+    }
+  }
+  
+.right-slide-in {
+animation: right-slideIn 0.5s ease-in-out forwards;
+}
+
+
+@keyframes right-slideOut {
+    0% {
+      transform: translateX(100%);
+    }
+    100% {
+      transform: translateX(0);
+    }
+  }
+  
+.right-slide-out {
+animation: right-slideOut 0.5s ease-in-out forwards;
+}

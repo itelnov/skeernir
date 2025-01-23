@@ -1,0 +1,9 @@
+<div id="right-container" class="flex flex-col w-full right-slide-in max-w-3xl px-4 bg-gray-900 rounded-lg shadow-md overflow-y-auto">
+    {% if graphlogs %}
+    <div class="mb-2 mt-2">
+        {% for log in graphlogs %}
+            {{ log | safe }}
+        {% endfor %}
+    <div>
+    {% endif %}
+</div>

@@ -1,0 +1,16 @@
+<div class="codeblock rounded-lg overflow-hidden my-1 p-0 ">
+    <div class="flex justify-between items-center bg-gray-700">
+        <span class="text-sm px-3 py-1 font-semibold text-gray-50">
+            {{ lang_display }}
+        </span>
+        <button class="px-3 py-1 m-0 text-sm rounded bg-gray-700 
+                     hover:bg-gray-600 hover:text-gray-900 
+                     focus:ring-blue-500"
+                onclick="copyText(this)">
+            Copy
+        </button>     
+    </div>
+    <pre>
+        <code class="{{ lang }}">{{escaped_content | safe }}</code>
+    </pre>
+</div>

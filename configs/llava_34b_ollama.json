@@ -1,0 +1,10 @@
+{
+    "server": "ollama",
+    "model_name": "llava:34b",
+    "sampling": {
+        "temperature": 0.7,
+        "num_ctx": 4096,
+        "num_predict": -1
+    }
+
+}

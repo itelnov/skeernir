@@ -87,7 +87,7 @@ Graph will be available in UI.
 
 #### Find more examples with [Llama.cpp](https://github.com/ggerganov/llama.cpp), [Ollama](https://github.com/ollama/ollama) and [vLLM](https://github.com/vllm-project/vllm) in [src/graphs](src/graphs). 
 
-#### Take a look on [src/graphs/corrective_rag/corrective_rag.md](src/graphs/corrective_rag/corrective_rag.md) and[src/graphs/corrective_rag_example.py](src/graphs/corrective_rag_example.py) to integrate Agent's outputs and logs into the Skeernir interface!
+#### Take a look on [src/graphs/corrective_rag/corrective_rag.md](src/graphs/corrective_rag/corrective_rag.md) and [src/graphs/corrective_rag_example.py](src/graphs/corrective_rag_example.py) to integrate Agent's outputs into the Skeernir interface (right-side panel on demo gifs)!
 
 :rocket::rocket::rocket: **More ready-to-use Agents and examples coming soon!**
 

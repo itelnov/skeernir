@@ -111,30 +111,30 @@ from attachments
 
 Here's what you need to do to get your environment set up and get started:
 
-### Setup Conda Environment with Python 3.11
 
 1. Create a new conda environment with Python 3.11:
 ```console
 conda create --name my_env python=3.11 
 conda activate my_env
 ```
-2. Update packages and install `ccache` and `cmake`:
+
+2. (Optional) Prepare for Graph's LLM
+
+Update packages and install `ccache` and `cmake`:
 
 ```console
 apt-get update
 apt-get install ccache
 apt-get install cmake
+
 ```
-
-### Prepare for Graphs
-
 Install Llama.cpp to use llama.cpp server. See [Llama.cpp](https://github.com/ggerganov/llama.cpp) for detailed instructions.
 The same to [Ollama](https://github.com/ggerganov/llama.cpp) or [vLLM](https://github.com/vllm-project/vllm) 
 
 You can communicate with your models and tools as you prefer, just implement your [Langgraph](https://python.langchain.com/docs/langgraph) Graph based on your previous projects or based on [examples](src/graphs) provided. 
 For instance if you're going to work with LLM models using llama.cpp python bindings, perform the following steps:
 
-1. In your newly created conda environment, install llama-cpp-python:
+In your newly created conda environment, install llama-cpp-python:
 
 ```console
 pip install llama-cpp-python --upgrade --force-reinstall --no-cache-dir
@@ -144,13 +144,7 @@ If GPU on board:
 ```console
 CMAKE_ARGS="-DGGML_CUDA=on" pip install llama-cpp-python --upgrade --force-reinstall --no-cache-dir
 ```
-
-2. Finally install all dependencies from the requirements.txt file:
-```console
-pip install -r requirements.txt --no-cache-dir
-```
-
-For locally deployed models, refer to the following Python scripts as examples:
+Prepare locally deployed models, refer to the following Python scripts as examples:
 
 * [src/graphs/llama3_2_vision_11b_on_ollama_server.py](src/graphs/llama3_2_vision_11b_on_ollama_server.py)
 * [src/graphs/phi3_5_mini_instruct_on_llamacpp_server.py](src/graphs/llama3_2_vision_11b_on_ollama_server.py)
@@ -160,7 +154,20 @@ and corresponding .json files in [configs](configs). **Don't forget to add your 
 Grab those **GGUF files** (or whatever other format you fancy).  
 Using Ollama? Don’t sweat it—models will magically pull themselves if they’re not already there.  
 
-**Finally, create .env with next environment variables:**
+3. Clone repo:
+
+```console
+git clone https://github.com/itelnov/skeernir.git
+cd skeernir
+```
+
+4. Install all dependencies from the requirements.txt file:
+
+```console
+pip install -r requirements.txt --no-cache-dir
+```
+
+5. **Create .env with next environment variables:**
 
 ```.env
 SKEERNIR_PORT = "<port you prefer>"
@@ -169,7 +176,7 @@ VLLM_PATH = "<your path to vllm>
 SQLALCHEMY_DATABASE_URL = "sqlite:///./chat.db" # if db located in project root or change according your needs
 ```
 
-Run 
+6. Run app 
 
 ```concole 
 python main.py

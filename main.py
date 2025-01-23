@@ -323,9 +323,9 @@ def create_graphlog_record(
     return graphlog_item
 
 
-@app.get('/favicon.ico', include_in_schema=False)
-async def favicon():
-    return FileResponse('favicon-32x32.png')
+# @app.get('/favicon.ico', include_in_schema=False)
+# async def favicon():
+#     return FileResponse('favicon-32x32.png')
 
 
 @app.get("/", response_class=RedirectResponse)

@@ -36,7 +36,7 @@ Create file with in [src/graphs](src/graphs) and define function which returns y
 - `tag` - some tag, will be appended to the name. Its up to you how to tag your agents
 - `att_modals` - define modalities your Agent might work with. For now only "text" and "image" are available. By default `att_modals=['text']`
 
-See exmpole for simple chatbot with gpt-4o-mini:
+See example for simple chatbot with gpt-4o-mini:
 
 ```python
 from langgraph.graph import MessagesState, StateGraph, START, END

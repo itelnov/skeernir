@@ -15,6 +15,27 @@
     <script src="{{ url_for('static', path='htmx.min.js') }}"></script>
     <script src="{{ url_for('static', path='marked.min.js') }}"></script>
     <script src="{{ url_for('static', path='prism.js') }}"></script>
+
+    <script>
+        MathJax = {
+            tex: {
+                inlineMath: [['\\(', '\\)'], ['\\[', '\\]']]
+            },
+            options: {
+                enableMenu: false, // Disable context menu
+                processHtmlClass: 'tmath', // Only process elements with 'math' class
+            },
+            svg: {
+                fontCache: 'global'
+            },
+            startup: {
+                typeset: true // Disable initial typeset
+            }
+        };
+        </script>
+    <script id="MathJax-script" async
+          src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js">
+    </script>
     <script>
 
         Prism.plugins.NormalizeWhitespace.setDefaults({
@@ -27,7 +48,18 @@
         function sleep(ms) {
             return new Promise(resolve => setTimeout(resolve, ms));
         }
-        
+
+        async function typesetAndContinue(element) {
+            try {
+                // not wait for the promise to resolve, actually bad idea, 
+                // to solve later
+                await MathJax.typesetPromise([element]);
+
+            } catch (error) {
+                console.error('Error during typesetting:', error);
+            }
+        }
+
         function getConverter() {
 
             if (typeof MarkdownConverter === 'undefined') {
@@ -38,8 +70,8 @@
                         this.container = container;
                         this.currentMessage = null;
                         this.currentElement = null;
-                        this.container.addEventListener('scroll', () => this.handleScroll());
                         this.hasUserScrolledUp = false;
+                        this.math_num = 0;
                         this.streamState = {
                             mode: 'markdown', // 'markdown' or 'code'
                             codeLanguage: null,
@@ -185,7 +217,8 @@
 
                     checkCodeBlock() {
                         // Modified regex to return null if no code block is found
-                        const regex = /```(\w+)(?:\n|$)/;
+                        //const regex = /```(\w+)(?:\n|$)/;
+                        const regex = /```(\w+)(?=|\n|$| |)/;
                         const match = this.streamState.accumulatedContent.match(
                             regex);
                         // If no match or no capture group, return null
@@ -196,18 +229,34 @@
                         var new_chunk = chunk.replace(/```/g, "|```");
                         return new_chunk.split("|");
                     }
+                    extractMathPatterns(text, pattern = /\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\)/g) {
+                        const mapping = {};
+                        let counter = 0;
+                        
+                        const processedText = text.replace(pattern, (match) => {
+                            const placeholder = `MATH_PLACEHOLDER_${counter++}N`;
+                            mapping[placeholder] = match;
+                            return placeholder;
+                        });
+
+                        return {
+                            processedText,
+                            mapping,
+                            chunks: Object.values(mapping)
+                        };
+                    }
+
+                    restoreMathPatterns(text, mapping) {
+                        let result = text;
+                        if (mapping) {
+                            for (const [placeholder, chunk] of Object.entries(mapping)) {
+                                result = result.split(placeholder).join(
+                                    `<span class="tmath">${chunk}</span>`);
+                            }
+                        }
+                        return result;
+                    }                 
                     
-                    startScrollCheck() {
-                        this.container.addEventListener(
-                            'scroll', () => this.handleScroll());
-                    }
-
-                    stopScrollCheck() {
-                        this.container.removeEventListener('scroll');
-                        this.userHasScrolledUp = False;
-                    }
-
-
                     addChunk(chunk) {
                         this.splitTripleBackticks(chunk).forEach(
                             (element, index) => {
@@ -221,8 +270,8 @@
                             }
                         );
                     }
-
-                    processChunk(chunk) {
+                    
+                    async processChunk(chunk) {
 
                         this.streamState.accumulatedContent += chunk;
 
@@ -262,12 +311,24 @@
                                 return;
 
                             } else {
-
-                                // Render markdown chunk
-                                const parsed = marked.parse(
+                                
+                                const { processedText, mapping } = this.extractMathPatterns(
                                     this.streamState.accumulatedContent);
-                                this.currentElement.innerHTML = parsed;
-                                // this.container.scrollTop = this.container.scrollHeight;
+                                
+                                const parsed = marked.parse(processedText);
+                                
+                                // Restoration happens only if mapping exists
+                                const restored = this.restoreMathPatterns(
+                                    parsed, mapping);
+                                
+                                this.currentElement.innerHTML = restored;
+                                if (Object.keys(mapping).length != 0) {
+                                    
+                                    await typesetAndContinue(
+                                        document.getElementById('chat-messages'));
+                                    // await sleep(1000);
+                                }
+
                             }
                             return;
                         
@@ -276,10 +337,10 @@
                             // Check for code block end or continue
                             const content = this.streamState.accumulatedContent.trim()
                             const endoftheblockA = content.match(/```(?:\s+|$)/);
-                            const endoftheblockB = content.match(/^```/m);
-                            
-                            //if (endoftheblock != null) {
-                            if (endoftheblockA && endoftheblockB)  {
+                            // const endoftheblockB = content.match(/^```/m);
+                            // && endoftheblockB
+                            if (endoftheblockA != null) {
+                            //if (endoftheblockA && endoftheblockB)  {
                                 // clean last update of the block
                                 let blockcontent = this.splitTripleBackticks(
                                     this.streamState.accumulatedContent.trim())
@@ -480,7 +541,9 @@
                 
                 const fileNameDiv = document.createElement('div');
                 fileNameDiv.className = 'text-sm text-white truncate' + 
-                                        'w-full mx-2 truncate whitespace-nowrap overflow-hidden text-ellipsis';
+                                        'w-full mx-2 truncate' +
+                                        ' whitespace-nowrap overflow-hidden' + 
+                                        ' text-ellipsis';
                 fileNameDiv.textContent = file.name;
                 fileItemDiv.appendChild(fileNameDiv);
 

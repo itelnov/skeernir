@@ -417,6 +417,39 @@
             }
         }
         
+
+        function StartPopUpStream(source) {
+
+            return new Promise((resolve, reject) => {
+                try {
+                    const pop_up_container = document.getElementById('toast-container');
+                    const eventSource = new EventSource(source);
+                    
+                    eventSource.addEventListener(
+                        'sys_warning', function (event) {
+                            const message = JSON.parse(event.data);
+                            pop_up_container.innerHTML = message
+                    });
+
+                    // Handle successful connection
+                    eventSource.onopen = () => {
+                        console.log('Stream connection established');
+                    };    
+
+                    eventSource.addEventListener('popup_streamend', function (event) {
+                        eventSource.close();
+                        console.log('Stream connection closed');
+                        resolve();
+                        return;
+                    });
+                } catch {
+                    console.error('Failed to start stream:', error);
+                    reject(error);
+                }
+            });
+        }
+
+
         function StartStream() {
 
             return new Promise((resolve, reject) => {
@@ -606,6 +639,49 @@
             const itemElement = document.getElementById(itemId);
             itemElement.remove();
         }
+
+        // Listen for HTMX response events globally
+        // document.body.addEventListener('htmx:afterRequest', function(event) {
+        //     const triggerHeader = event.detail.xhr.getResponseHeader('HX-Trigger');
+        //     console.log('HX-Trigger header:', triggerHeader); // Debug log
+            
+        //     if (triggerHeader) {
+        //         try {
+        //             const triggers = JSON.parse(triggerHeader);
+        //             console.log('Parsed triggers:', triggers); // Debug log
+                    
+        //             if (triggers.showWarning) {
+        //                 showWarningToast(triggers.showWarning.message);
+        //             }
+        //         } catch (e) {
+        //             console.error('Error parsing HX-Trigger:', e);
+        //         }
+        //     }
+        // });
+
+        // function showWarningToast(message) {
+        //     console.log('Showing toast with message:', message); // Debug log
+            
+        //     const toastContainer = document.getElementById('toast-container');
+        //     const warningHtml = `
+        //         <div class="flex items-center p-4 mb-4 rounded-lg shadow-lg bg-yellow-100 text-yellow-800 max-w-xs">
+        //             <div class="inline-flex items-center justify-center flex-shrink-0 w-8 h-8 rounded-lg bg-yellow-200">
+        //                 <svg class="w-5 h-5" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 20 20">
+        //                     <path d="M10 .5a9.5 9.5 0 1 0 9.5 9.5A9.51 9.51 0 0 0 10 .5ZM10 15a1 1 0 1 1 0-2 1 1 0 0 1 0 2Zm1-4a1 1 0 0 1-2 0V6a1 1 0 0 1 2 0v5Z"/>
+        //                 </svg>
+        //             </div>
+        //             <div class="ms-3 text-sm font-normal">${message}</div>
+        //         </div>
+        //     `;
+        //     toastContainer.insertAdjacentHTML('beforeend', warningHtml);
+            
+        //     // Remove the toast after 5 seconds
+        //     const toast = toastContainer.lastElementChild;
+        //     setTimeout(() => {
+        //         toast.remove();
+        //     }, 5000);
+        // }
+
     </script>
 </body>
 </html>

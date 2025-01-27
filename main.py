@@ -323,11 +323,6 @@ def create_graphlog_record(
     return graphlog_item
 
 
-# @app.get('/favicon.ico', include_in_schema=False)
-# async def favicon():
-#     return FileResponse('favicon-32x32.png')
-
-
 @app.get("/", response_class=RedirectResponse)
 async def root(
     request: Request,
@@ -336,28 +331,37 @@ async def root(
     user = get_current_user(request, db)
     if user:
         session_id = str(uuid4())
-
-        GM.connect_session(session_id, GM.default_graph)
+        try:
+            GM.connect_session(session_id, GM.default_graph)
+            redirect_url = request.url_for("chat", session_id=session_id)
+            response = RedirectResponse(
+                url=redirect_url, status_code=status.HTTP_302_FOUND)
+            return response        
         
-        redirect_url = request.url_for("chat", session_id=session_id)
-        response = RedirectResponse(
-            url=redirect_url, status_code=status.HTTP_302_FOUND)
-        return response
-
+        except Exception as e:
+            return RedirectResponse(
+                url=(f"/login?error_message=Default grpah {GM.default_graph} "
+                     f"was not compiled with Exception:\n\n{e}. \n"
+                     f"Check {GM.default_graph}.json in config and graph "
+                     f"definition in src/graphs"), 
+                status_code=status.HTTP_302_FOUND)
+        
     return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
 
 
 @app.get("/login", response_class=HTMLResponse)
 async def get_login_form(
     request: Request,
+    error_message: str | None = None,
+    success_message: str | None = None,
     db: Session = Depends(get_db),
 ):
     user = get_current_user(request, db)
-    if not user:
+    if not user or error_message:
         return templates.TemplateResponse(request, "login.html", 
             {
-                "error_message": None,
-                "success_message": None
+                "error_message": error_message,
+                "success_message": success_message
             }
         )
     responce = RedirectResponse(
@@ -473,6 +477,7 @@ async def start_newconv(
                 session_id = str(uuid4())
                 GM.connect_session(session_id, graphai_name)
         except Exception as e:
+            GM.remove_session(session_id, with_graph=True)
             logger.error(e)
     
         finally:
@@ -495,15 +500,17 @@ async def loadmodel(
         await SMH.delete_queue(session_id)
         GM.connect_session(session_id, selected_graph)
     except Exception as e:
+        GM.remove_session(session_id, with_graph=True)
+        GM.connect_session(session_id, GM.default_graph)
         logger.error(e)
+    finally:
+        redirect_url = request.url_for("chat", session_id=session_id)
+        response = RedirectResponse(
+            url=redirect_url, status_code=status.HTTP_302_FOUND)
+        return response
 
-    redirect_url = request.url_for("chat", session_id=session_id)
-    response = RedirectResponse(
-        url=redirect_url, status_code=status.HTTP_302_FOUND)
-    return response
 
-
-@app.get("/main/{session_id}", response_class=HTMLResponse)
+@app.get("/main/{session_id}", response_class=HTMLResponse | RedirectResponse)
 async def chat(
     request: Request,
     session_id: str,
@@ -514,7 +521,27 @@ async def chat(
     if not user:
         return RedirectResponse(
             url="/login", status_code=status.HTTP_302_FOUND)
-    
+
+    session = GM.get_session(session_id)
+    if session is None:
+        try:
+            if not parent_session_id:
+                raise
+            # The case when session is restored from conversation history and is 
+            # not available in GraphRegistry memory. In this case we have parent 
+            # session and but can't garantee the graph used for that 
+            # conversation is now available (as for now the name of the graph 
+            # for particular conversation is not stored either). To handle this 
+            # event, we restore session with a default graph and let user to 
+            # choose the graph from available list. The parent session will be 
+            # removed.
+            GM.remove_session(parent_session_id)
+            await SMH.delete_queue(parent_session_id)
+            session = GM.connect_session(session_id, GM.default_graph)
+        except Exception as e:
+            request.session.clear()
+            return RedirectResponse(url="/", status_code=status.HTTP_302_FOUND)
+
     # restore user conversations
     user_convs = get_conversations_with_earliest_messages(db, user)
 
@@ -526,21 +553,8 @@ async def chat(
         )
         for conv in reversed(user_convs)
     ) if user_convs else ''
-
-    session = GM.get_session(session_id)
-    if session is None:
-        # The case when session is restored from conversation history and is not 
-        # available in GraphRegistry memory. In this case we can't garantee the 
-        # graph used for that conversation is now available (as for now the name 
-        # of the graph for particular conversation is not stored either). To 
-        # handle this event, we restore session with a default graph and let 
-        # user to choose the graph from available list. The parent session will
-        # be removed.
-        GM.remove_session(parent_session_id)
-        await SMH.delete_queue(parent_session_id)
-        session = GM.connect_session(session_id, GM.default_graph)
     
-    # restore conversation
+    # restore current conversation history
     graph_logs_html = []
     right_container_html = ""
 

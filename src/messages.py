@@ -45,7 +45,7 @@ class AttachmentData(BaseModel):
 
     @computed_field
     @property
-    def modality(self) -> str:
+    def format(self) -> str:
         return self.type.split('/')[0]
 
     @computed_field
@@ -59,25 +59,24 @@ class AttachmentData(BaseModel):
     @property
     def processed_content(self) -> str:
         if self.content_processed is None:
-            if self.modality in ModalsType._value2member_map_ and self.modality not in self.valid_modalities:
+            if self.format in ModalsType._value2member_map_ and self.format not in self.valid_modalities:
                 raise AttachmentProcessingError((
-                    f"Error processing for modality type: {self.modality}.\n"
+                    f"Error processing for modality type: {self.format}.\n"
                     "It seems modality is known but not valid for this Graph"))
-
-            processor = self.processor_map.get(self.modality, TextProcessor())
+            processor = self.processor_map.get(self.format, TextProcessor())
             self.content_processed = processor.process_content(self)
         
         return self.content_processed
     
     @property
     def formatted_content(self) -> str:
-        processor = self.processor_map.get(self.modality,  TextProcessor())
+        processor = self.processor_map.get(self.format,  TextProcessor())
         return processor.format_content(self)
 
     @classmethod
-    def register_processor(cls, modality: str):
+    def register_processor(cls, format: str):
         def decorator(processor):
-            cls.processor_map[modality] = processor()
+            cls.processor_map[format] = processor()
             return processor
         return decorator
     
@@ -147,6 +146,29 @@ class ImageProcessor(BaseProcessor):
                 "url": f"data:{attach.type};base64,{attach.processed_content}"
             }
         }   
+
+
+# @AttachmentData.register_processor('application')
+class AppProcessor(BaseProcessor):
+    
+    @classmethod
+    def process_content(cls, attach: AttachmentData) -> str:
+        if 'image' not in attach.valid_modalities:
+            return TextProcessor.process_content(attach)
+
+        if 'pdf' in attach.type:
+            # https://pymupdf.readthedocs.io/en/latest/pymupdf4llm/api.html#pymupdf4llm-api
+            return TextProcessor.process_content(attach)
+
+        else:
+            return TextProcessor.process_content(attach)
+        
+
+
+    @classmethod 
+    def format_content(cls, attach: AttachmentData):
+        content = attach.processed_content
+        pass
 
 
 class MessageInput(BaseModel):

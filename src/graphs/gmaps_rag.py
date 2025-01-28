@@ -20,6 +20,7 @@ from langgraph.graph import END, StateGraph
 from langgraph.checkpoint.memory import MemorySaver
 from jinja2.environment import Template
 from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel
 
 
 # for testing purposes:
@@ -31,12 +32,18 @@ from src.entry import LoggedAttribute, BaseEntry
 from src import models
 
 
+class GoogleMapsAPIWrapper(BaseModel):
+    # TODO: Implement according to Tavily logic
+    def __init__(self, maps_api_key):
+        pass
+
+
 templates = Jinja2Templates(directory="templates")
 
 RETRIEVE = "retrieve"
-GRADE_DOCUMENTS = "grade_documents"
+GRADE_COMMENTS = "grade_comments"
 GENERATE = "generate"
-WEBSEARCH = "websearch"
+API_SEARCH = "apisearch"
 CLEANUP = "cleanup"
 
 
@@ -49,15 +56,17 @@ class FlowState(TypedDict):
 
     Attributes:
         question: question
+        location: location mentioned in question
         generation: LLM generation
-        web_search: whether to add search
-        documents: list of documents
+        map_search: whether to add search with map API
+        comments: list of documents
     """
 
     messages: str
+    location: str
     generation: str
-    web_search: bool
-    documents: List[Document]
+    map_search: bool
+    comments: List[Document]
     from_graph: Optional[LoggedAttribute] = None
 
     @classmethod
@@ -210,26 +219,28 @@ def get_generation_chain(api_token: str) -> Runnable:
     return generation_chain
 
 
-def get_web_search_tool(tavily_api_key: str) -> Runnable:
+def get_google_maps_api_tool(maps_api_key: str) -> Runnable:
     """
-    Creates a runnable tool for performing web search based on a query.
+    Creates a tool for retrieving comments related to the prompted
+    location.
 
     Args:
-        tavily_api_key (str): Tavily API key for authentication.
+        maps_api_key (str): Google Maps API key for authentication.
 
     Returns:
-        Runnable: A chain of operations for web search.
+        Runnable: A chain of operations for content search.
     """
-    search = TavilySearchAPIWrapper(
-        tavily_api_key=tavily_api_key)
-    web_search_tool = TavilySearchResults(api_wrapper=search, max_results=5)
-    return web_search_tool
+    # search = GoogleMapsAPIWrapper(
+    #     maps_api_key=maps_api_key)
+    # map_tool = GoogleMapsAPIWrapper(api_wrapper=search, max_results=5)
+    map_tool = GoogleMapsAPIWrapper(maps_api_key=maps_api_key)
+    return map_tool
 
 
-@tool_graph(name='openai-rag-corrective', tag="RAG", entries_map=True)
-def get_corrective_rag_graph(
+@tool_graph(name='gmap-rag-corrective', tag="RAG", entries_map=True)
+def get_map_rag_graph(
     api_token: str,
-    tavily_api_key: str,
+    maps_api_key: str,
     **kwargs) -> StateGraph:
     """
     Constructs and returns a StateGraph for the RAG (Retrieval-Generation) pipeline.
@@ -249,11 +260,11 @@ def get_corrective_rag_graph(
         # client_settings=Settings(anonymized_telemetry=False),
         embedding_function=OpenAIEmbeddings(api_key=api_token)).as_retriever(
             search_type="similarity", search_kwargs={"k": 5})
-    
+
     retrieval_grader_chain = get_retrival_grader_chain(api_token)
     generation_chain = get_generation_chain(api_token)
-    web_search_tool = get_web_search_tool(tavily_api_key)
-    
+    map_api_tool = get_google_maps_api_tool(maps_api_key)
+
     # Define functions on our nodes
     async def run_retrieve(state: FlowState) -> Dict[str, Any]:
         question = state["messages"][0].content
@@ -261,19 +272,19 @@ def get_corrective_rag_graph(
             question = question[0]["text"]
         documents = await retriever.ainvoke(question)
         
-        """ We add `from_graph` into state which is defined as LoggedAttribute 
-        class. During streaming the output from graph, all classes which inherit 
+        """ We add `from_graph` into state which is defined as LoggedAttribute
+        class. During streaming the output from graph, all classes which inherit
         from LoggedAttribute class will be considered to log into RIGHT-SIDE 
-        panel. See LoggedAttribute and DocumentEntry class definitions for more 
+        panel. See LoggedAttribute and DocumentEntry class definitions for more
         details."""
         
         return {
-            "documents": documents, 
-            "messages": question, 
+            "documents": documents,
+            "messages": question,
             "from_graph": LoggedAttribute(content="Documents retrieved")
             }
 
-    async def run_grade_documents(state: FlowState) -> Dict[str, Any]:
+    async def run_grade_comments(state: FlowState) -> Dict[str, Any]:
         """
         Grades the retrieved documents for relevance to the question.
 
@@ -284,9 +295,9 @@ def get_corrective_rag_graph(
             dict: Contains filtered documents and web search flag.
         """
         question = state["messages"]
-        documents = state["documents"]
+        documents = state["comments"]
 
-        filtered_docs = []
+        filtered_comments = []
         web_search = False if documents else True
         for d in documents:
             score = await retrieval_grader_chain.ainvoke(
@@ -294,20 +305,20 @@ def get_corrective_rag_graph(
             )
             grade = score.binary_score
             if grade.lower() == "yes":
-                filtered_docs.append(d)
+                filtered_comments.append(d)
             else:
                 web_search = True
                 continue
         return {
-            "documents": filtered_docs, 
+            "comments": filtered_comments,
             "messages": question,
             "web_search": web_search,
             "from_graph": LoggedAttribute(content=(
-                f"Documents graded. Filtered documents: {len(filtered_docs)}"
+                f"Comments graded. Filtered comments: {len(filtered_comments)}"
                 f" Web search required: {str(web_search)}"))
             }
 
-    async def run_web_search(state: FlowState) -> Dict[str, Any]:
+    async def query_maps_api(state: FlowState) -> Dict[str, Any]:
         """
         Performs web search if required.
 
@@ -317,14 +328,15 @@ def get_corrective_rag_graph(
         Returns:
             dict: Contains web search results and question.
         """
+        location = state["location"]
         question = state["messages"]
-        if isinstance(question, List):
-            question = question[0]["text"]
+        if isinstance(location, List):
+            location = location[0]["text"]
         documents = state["documents"]
-        web_docs = await web_search_tool.ainvoke({"query": question})
-        if "Exception" in web_docs:
+        map_api_response = await map_api_tool.ainvoke({"query": location})
+        if "Exception" in map_api_response:
             return {
-                "documents": documents, 
+                "documents": documents,
                 "messages": question,
                 "from_graph": LoggedAttribute(
                     content="Web search failed, continue")
@@ -332,12 +344,12 @@ def get_corrective_rag_graph(
         else:
             web_docs = [
                 Document(
-                    page_content=d["content"], 
+                    page_content=d["content"],
                     metadata={
-                        "source": d["url"], 
+                        "source": d["url"],
                         "title": ' '.join(
                             str(d["content"]).split(maxsplit=5)[:5]) + "..."
-                        }) for d in web_docs]
+                        }) for d in map_api_response]
 
         if documents is not None:
             documents.extend(web_docs)
@@ -345,7 +357,7 @@ def get_corrective_rag_graph(
             documents = web_docs
         
         return {
-            "documents": documents, 
+            "documents": documents,
             "messages": question,
             "from_graph": LoggedAttribute(content="Web search results added")
                 }
@@ -353,15 +365,15 @@ def get_corrective_rag_graph(
     async def clean_up(state: FlowState) -> Dict[str, Any]:
 
         """End node that resets state after processing"""
-        
+
         return FlowState.reset(state, preserve_messages=False)
 
-    # Define our edges 
-    def decide_to_generate(state: FlowState) -> str:
-        if state["web_search"]:
-            return WEBSEARCH
+    # Define our edges
+    def decide_to_query_api(state: FlowState) -> str:
+        if state["api_search"]:
+            return API_SEARCH
         else:
-            return GENERATE
+            return GRADE_COMMENTS
 
     async def run_generation(state: FlowState) -> Dict[str, Any]:
         question = state["messages"]
@@ -369,9 +381,9 @@ def get_corrective_rag_graph(
 
         generation = await generation_chain.ainvoke(
             {"context": documents, "question": question})
-        
+
         """ Here we add documents as instances of DocumentEntry class
-        This class defines how our data would be saved in database and 
+        This class defines how our data would be saved in database and
         how it will be rendered in UI """
 
         log_items = ["Answer generated based on documents:"]
@@ -380,10 +392,10 @@ def get_corrective_rag_graph(
                 title=doc.metadata.get('title', ''),
                 page_content=doc.page_content,
                 source=doc.metadata.get('source', '')))
-        
+
         return {
-            "documents": documents, 
-            "messages": question, 
+            "documents": documents,
+            "messages": question,
             "generation": generation,
             "from_graph": LoggedAttribute(content=log_items)
             }
@@ -391,33 +403,33 @@ def get_corrective_rag_graph(
     # Define graph
     workflow = StateGraph(FlowState)
     workflow.add_node(RETRIEVE, run_retrieve)
-    workflow.add_node(GRADE_DOCUMENTS, run_grade_documents)
+    workflow.add_node(GRADE_COMMENTS, run_grade_comments)
     workflow.add_node(GENERATE, run_generation)
-    workflow.add_node(WEBSEARCH, run_web_search)
+    workflow.add_node(API_SEARCH, query_maps_api)
     workflow.add_node(CLEANUP, clean_up)
 
     workflow.set_entry_point(RETRIEVE)
-    workflow.add_edge(RETRIEVE, GRADE_DOCUMENTS)
     workflow.add_conditional_edges(
-        source=GRADE_DOCUMENTS,
-        path=decide_to_generate,
+        source=RETRIEVE,
+        path=decide_to_query_api,
         # for optional extended communication between nodes
         path_map={
-            WEBSEARCH: WEBSEARCH,
-            GENERATE: GENERATE,
+            API_SEARCH: API_SEARCH,
+            GRADE_COMMENTS: GRADE_COMMENTS,
         },
     )
-
-    workflow.add_edge(WEBSEARCH, GENERATE)
+    workflow.add_edge(RETRIEVE, GRADE_COMMENTS)
+    workflow.add_edge(API_SEARCH, RETRIEVE)
+    workflow.add_edge(GRADE_COMMENTS, GENERATE)
     workflow.add_edge(GENERATE, CLEANUP)
     workflow.add_edge(CLEANUP, END)
     memory = MemorySaver()
 
     app = workflow.compile(checkpointer=memory)
-    
-    # app.get_graph().draw_mermaid_png(
-    #     output_file_path="corrective_rag_graph.png")
-    
+
+    app.get_graph().draw_mermaid_png(
+        output_file_path="corrective_rag_graph.png")
+
     return app
 
 
@@ -426,7 +438,7 @@ if __name__ == "__main__":
     import logging
     import tracemalloc
     import asyncio
-    
+
     from src.registry import GraphManager
     from src.graphs.utils import run_graph_in_terminal
 
@@ -437,16 +449,16 @@ if __name__ == "__main__":
     logger = logging.getLogger(__name__)
 
     GM = GraphManager()
-    
+
     try:
         session_id = str(uuid4())
         asyncio.run(
             run_graph_in_terminal(
                 graph_manager=GM,
-                config="openai-rag-corrective",
+                config="gmap-rag-corrective",
                 session_id=session_id))
     finally:
-        
+
         snapshot = tracemalloc.take_snapshot()
         top_stats = snapshot.statistics('lineno')
         logger.info("\nMemory traceback:")

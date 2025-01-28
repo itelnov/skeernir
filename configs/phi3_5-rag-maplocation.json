@@ -1,0 +1,16 @@
+{
+    "server": "llamacpp",
+    "model_path": "",
+    "ctx-size": 10000,
+    "use_gpu": true,
+    "n_gpu_layers": 33,
+    "cpu-strict": 0,
+    "flash-attn": true,
+    "sampling": {
+        "temperature": 0.8
+    },
+
+    "gmaps_api_key": "",
+    "vectordb_path": ".",
+    "collection_name": "usecases_rag"
+}

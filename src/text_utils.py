@@ -41,7 +41,8 @@ class CodeBlockPreprocessor:
             'xml': 'XML',
             'yaml': 'YAML',
             'markdown': 'Markdown',
-            'md': 'Markdown'
+            'md': 'Markdown',
+            'latex': 'latex'
         }
         return lang_map.get(lang.lower(), lang.capitalize())
     
@@ -60,12 +61,34 @@ class CodeBlockPreprocessor:
             "indicator": f"#copy-indicator-{self.counter}"
         }
         
-        placeholder = f'CODEBLOCK_{self.counter}'
+        placeholder = f'CODEBLOCK_{self.counter}N'
         self.code_blocks[placeholder] = code_template.render(**data)
         self.counter += 1
         
         return placeholder
 
+
+class LatexPreprocessor:
+    def __init__(self):
+        self.inline_math_blocks = {}
+        self.display_math_blocks = {}
+        self.counter_inline = 0
+        self.counter_display = 0
+    
+    def _process_math(self, match):
+        """Process inline LaTeX math expressions"""
+        inline = match.group(1)  # Language is now in group 1
+        display = match.group(2)  # Code is now in group 2
+        if inline:
+            placeholder = f'INLINEMATH_{self.counter_inline}N'
+            self.inline_math_blocks[placeholder] = inline
+            self.counter_inline += 1
+        if display:
+            placeholder = f'DISPLAYMATH_{self.counter_display}N'
+            self.display_math_blocks[placeholder] = display
+            self.counter_display += 1
+        return placeholder
+    
 
 class MarkdownConverter:
     """
@@ -83,18 +106,30 @@ class MarkdownConverter:
             str: HTML output with all extensions processed
         """
         # Initialize preprocessor for code blocks
-        preprocessor = CodeBlockPreprocessor()
+        code_processor = CodeBlockPreprocessor()
+        latex_preprocessor = LatexPreprocessor()
+                
         
         # Process code blocks before markdown conversion
         # with plain text (3 groups)
         # pattern = '```((\w+)\n)?(.*?)(?<=\n)```(\n|$)'
         # without plain text (2 groups)
-        pattern = r'```(\w+)\n(.*?)(?<=\n)```(?:\n|$)'
 
+        # code_pattern = r'```(\w+)\n(.*?)(?<=\n)```(?:\n|$)'
+        code_pattern = r'```(\w+)([\s\S]+?)(?=```)```'
         processed_text = re.sub(
-            pattern, 
-            preprocessor._process_code_block, 
+            code_pattern, 
+            code_processor._process_code_block, 
             markdown_text, 
+            flags=re.DOTALL)
+
+        latex_preprocessor = LatexPreprocessor()
+        
+        math_pattern = r"(\\\(.*?\\\))|(\\\[.*?\\\])"
+        processed_text = re.sub(
+            math_pattern,
+            latex_preprocessor._process_math,
+            processed_text,
             flags=re.DOTALL)
 
         # Convert markdown to HTML with all extensions
@@ -103,7 +138,16 @@ class MarkdownConverter:
         processed_text = html.escape(processed_text)
         html_output = md.convert(processed_text)
 
+        # Replace math placeholders with MathJax-ready spans
+        for placeholder, math_content in latex_preprocessor.inline_math_blocks.items():
+            html_output = html_output.replace(
+                f"{placeholder}", f'<span class="tmath">{math_content}</span>')
+
+        for placeholder, math_content in latex_preprocessor.display_math_blocks.items():
+            html_output = html_output.replace(
+                f"{placeholder}", f'<span class="tmath">{math_content}</span>')
+
         # TODO insirt as a template !!! 
-        for placeholder, formatted_code in preprocessor.code_blocks.items():
+        for placeholder, formatted_code in code_processor.code_blocks.items():
             html_output = html_output.replace(f"{placeholder}", formatted_code)
         return html_output

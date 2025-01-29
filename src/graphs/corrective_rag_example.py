@@ -20,6 +20,7 @@ from langgraph.graph import END, StateGraph
 from langgraph.checkpoint.memory import MemorySaver
 from jinja2.environment import Template
 from fastapi.templating import Jinja2Templates
+from langchain_core.messages import RemoveMessage
 
 
 # for testing purposes:
@@ -72,8 +73,15 @@ class FlowState(TypedDict):
         Returns:
             A new FlowState instance with reset values
         """
+
+        # def delete_messages(state):
+        #     messages = state["messages"]
+        #     if len(messages) > 3:
+        #         return {"messages": [RemoveMessage(id=m.id) for m in messages[:-3]]}
+
         fresh_state: T = {
-            "messages": state["messages"] if preserve_messages else "",
+            "messages": state["messages"] if preserve_messages else [
+                RemoveMessage(id=m.id) for m in state["messages"]],
             "generation": "",
             "web_search": False,
             "documents": [],
@@ -269,7 +277,7 @@ def get_corrective_rag_graph(
         
         return {
             "documents": documents, 
-            "messages": question, 
+            "messages": state["messages"], 
             "from_graph": LoggedAttribute(content="Documents retrieved")
             }
 
@@ -283,7 +291,7 @@ def get_corrective_rag_graph(
         Returns:
             dict: Contains filtered documents and web search flag.
         """
-        question = state["messages"]
+        question = state["messages"][0].content
         documents = state["documents"]
 
         filtered_docs = []
@@ -300,7 +308,7 @@ def get_corrective_rag_graph(
                 continue
         return {
             "documents": filtered_docs, 
-            "messages": question,
+            "messages": state["messages"],
             "web_search": web_search,
             "from_graph": LoggedAttribute(content=(
                 f"Documents graded. Filtered documents: {len(filtered_docs)}"
@@ -317,7 +325,7 @@ def get_corrective_rag_graph(
         Returns:
             dict: Contains web search results and question.
         """
-        question = state["messages"]
+        question = state["messages"][0].content
         if isinstance(question, List):
             question = question[0]["text"]
         documents = state["documents"]
@@ -325,7 +333,7 @@ def get_corrective_rag_graph(
         if "Exception" in web_docs:
             return {
                 "documents": documents, 
-                "messages": question,
+                "messages": state["messages"],
                 "from_graph": LoggedAttribute(
                     content="Web search failed, continue")
                     }
@@ -346,7 +354,7 @@ def get_corrective_rag_graph(
         
         return {
             "documents": documents, 
-            "messages": question,
+            "messages": state["messages"],
             "from_graph": LoggedAttribute(content="Web search results added")
                 }
 
@@ -364,7 +372,7 @@ def get_corrective_rag_graph(
             return GENERATE
 
     async def run_generation(state: FlowState) -> Dict[str, Any]:
-        question = state["messages"]
+        question = state["messages"][0].content
         documents = state["documents"]
 
         generation = await generation_chain.ainvoke(
@@ -383,7 +391,7 @@ def get_corrective_rag_graph(
         
         return {
             "documents": documents, 
-            "messages": question, 
+            "messages": state["messages"], 
             "generation": generation,
             "from_graph": LoggedAttribute(content=log_items)
             }

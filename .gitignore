@@ -10,7 +10,7 @@ __pycache__/
 configs/gpt-4o-mini-default.json
 configs/openai-rag-corrective.json
 configs/Sonnet35.json
-
+tailwindcss-linux-x64
 
 chat.db
 

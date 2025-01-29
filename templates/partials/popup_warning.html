@@ -1,0 +1,13 @@
+<!-- warning_message.html -->
+<div
+    class=""
+    hx-trigger="load delay:6s"
+    hx-delete="/remove-popup-warning"
+    hx-target="closest div"
+    hx-swap="outerHTML">
+    <div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 
+                p-4 rounded shadow-lg slide-in max-w-80">
+        <p class="font-bold">Warning!</p>
+        <p> {{ warning_message | safe }} </p>
+    </div>
+</div>

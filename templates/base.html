@@ -15,6 +15,27 @@
     <script src="{{ url_for('static', path='htmx.min.js') }}"></script>
     <script src="{{ url_for('static', path='marked.min.js') }}"></script>
     <script src="{{ url_for('static', path='prism.js') }}"></script>
+
+    <script>
+        MathJax = {
+            tex: {
+                inlineMath: [['\\(', '\\)'], ['\\[', '\\]']]
+            },
+            options: {
+                enableMenu: false, // Disable context menu
+                // processHtmlClass: 'tmath', // Only process elements with 'math' class
+            },
+            svg: {
+                fontCache: 'global'
+            },
+            startup: {
+                typeset: true // Disable initial typeset
+            }
+        };
+        </script>
+    <script id="MathJax-script" async
+          src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js">
+    </script>
     <script>
 
         Prism.plugins.NormalizeWhitespace.setDefaults({
@@ -27,7 +48,18 @@
         function sleep(ms) {
             return new Promise(resolve => setTimeout(resolve, ms));
         }
-        
+
+        async function typesetAndContinue(element) {
+            try {
+                // not wait for the promise to resolve, actually bad idea, 
+                // to solve later
+                await MathJax.typesetPromise([element]);
+
+            } catch (error) {
+                console.error('Error during typesetting:', error);
+            }
+        }
+
         function getConverter() {
 
             if (typeof MarkdownConverter === 'undefined') {
@@ -38,8 +70,8 @@
                         this.container = container;
                         this.currentMessage = null;
                         this.currentElement = null;
-                        this.container.addEventListener('scroll', () => this.handleScroll());
                         this.hasUserScrolledUp = false;
+                        this.placeholder_buffer = [];
                         this.streamState = {
                             mode: 'markdown', // 'markdown' or 'code'
                             codeLanguage: null,
@@ -146,8 +178,9 @@
                         this.currentMessage = temp.firstElementChild;
                         this.container.appendChild(this.currentMessage);
                         
-                        this.currentElement = this.currentMessage.querySelector(
-                            'div:not(:has(div))');
+                        // this.currentElement = this.currentMessage.querySelector(
+                        //     'div:not(:has(div))');
+                        this.currentElement = this.currentMessage.querySelector('.chunks');
                         this.currentParent = this.currentElement
 
                         // Reset stream state
@@ -185,7 +218,8 @@
 
                     checkCodeBlock() {
                         // Modified regex to return null if no code block is found
-                        const regex = /```(\w+)(?:\n|$)/;
+                        //const regex = /```(\w+)(?:\n|$)/;
+                        const regex = /```(\w+)(?=|\n|$| |)/;
                         const match = this.streamState.accumulatedContent.match(
                             regex);
                         // If no match or no capture group, return null
@@ -196,18 +230,34 @@
                         var new_chunk = chunk.replace(/```/g, "|```");
                         return new_chunk.split("|");
                     }
+
+                    extractMathPatterns(text, pattern = /\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\)/g) {
+                        const matches = {};
+                        let counter = 0;
+                        
+                        const processedText = text.replace(pattern, (match) => {
+                            const placeholder = `MATH_PLACEHOLDER_${counter++}N`;
+                            matches.push(match);
+                            return placeholder;
+                        });
+
+                        return {
+                            processedText,
+                            matches
+                        };
+                    }
+
+                    restoreMathPatterns(text, mapping) {
+                        let result = text;
+                        if (mapping) {
+                            for (const [placeholder, chunk] of Object.entries(mapping)) {
+                                result = result.split(placeholder).join(
+                                    `${chunk}`);
+                            }
+                        }
+                        return result;
+                    }                 
                     
-                    startScrollCheck() {
-                        this.container.addEventListener(
-                            'scroll', () => this.handleScroll());
-                    }
-
-                    stopScrollCheck() {
-                        this.container.removeEventListener('scroll');
-                        this.userHasScrolledUp = False;
-                    }
-
-
                     addChunk(chunk) {
                         this.splitTripleBackticks(chunk).forEach(
                             (element, index) => {
@@ -221,8 +271,8 @@
                             }
                         );
                     }
-
-                    processChunk(chunk) {
+                    
+                    async processChunk(chunk) {
 
                         this.streamState.accumulatedContent += chunk;
 
@@ -262,13 +312,52 @@
                                 return;
 
                             } else {
+                                
+                                const matches = [];
+                                const start_idx = this.placeholder_buffer.length;
+                                const pattern = /\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\)/g;
+                                let counter = start_idx
+                                const text = this.streamState.accumulatedContent;
+                                const processedText = text.replace(pattern, (match) => {
+                                    const placeholder = `MATH_PLACEHOLDER_${counter}N`;
+                                    matches.push(match);
+                                    counter++
+                                    return placeholder;
+                                });
+                                this.streamState.accumulatedContent = processedText;
+                                
+                                // HTML to Markdown
+                                let parsed = marked.parse(processedText);
+                                
+                                // Restoration must be in order by elements in
+                                if (this.placeholder_buffer.length > 0) {
+                                    this.placeholder_buffer.forEach((element, index) => {
+                                        parsed = parsed.split(
+                                            `MATH_PLACEHOLDER_${index}N`).join(`${element.outerHTML}`);
+                                    });
+                                }
 
-                                // Render markdown chunk
-                                const parsed = marked.parse(
-                                    this.streamState.accumulatedContent);
+                                if (matches.length > 0) {
+                                    matches.forEach((element, index) => {
+                                        parsed = parsed.split(
+                                            `MATH_PLACEHOLDER_${start_idx + index}N`).join(`${element}`);
+                                    });
+                                }
+
+                                // Restoration happens only if mapping exists
                                 this.currentElement.innerHTML = parsed;
-                                // this.container.scrollTop = this.container.scrollHeight;
-                            }
+                                
+                                if (matches.length > 0) {
+                                    
+                                    await typesetAndContinue(
+                                        document.getElementById('chat-messages').lastElementChild
+                                    );
+                                    const mjx_containers = this.currentElement.getElementsByTagName(
+                                        'mjx-container')
+
+                                    this.placeholder_buffer = Array.from(mjx_containers);
+                                    }
+                                }
                             return;
                         
                         } else if (this.streamState.mode === 'code') {
@@ -276,10 +365,10 @@
                             // Check for code block end or continue
                             const content = this.streamState.accumulatedContent.trim()
                             const endoftheblockA = content.match(/```(?:\s+|$)/);
-                            const endoftheblockB = content.match(/^```/m);
-                            
-                            //if (endoftheblock != null) {
-                            if (endoftheblockA && endoftheblockB)  {
+                            // const endoftheblockB = content.match(/^```/m);
+                            // && endoftheblockB
+                            if (endoftheblockA != null) {
+                            //if (endoftheblockA && endoftheblockB)  {
                                 // clean last update of the block
                                 let blockcontent = this.splitTripleBackticks(
                                     this.streamState.accumulatedContent.trim())
@@ -329,6 +418,30 @@
             }
         }
         
+        function showStopButton() {
+            document.getElementById('SubmitButton').classList.add('hidden');
+            document.getElementById('HardStopButton').classList.remove('hidden');
+        }
+
+        function showSubmitButton() {
+            document.getElementById('HardStopButton').classList.add('hidden');
+            document.getElementById('SubmitButton').classList.remove('hidden');
+        }
+
+        function showDeleteButtons() {
+            const deleteButtons = document.querySelectorAll('.mess-del-button');
+            deleteButtons.forEach(button => {
+                button.classList.remove('invisible');
+            });
+        }
+
+        function hideDeleteButtons() {
+            const deleteButtons = document.querySelectorAll('.mess-del-button');
+            deleteButtons.forEach(button => {
+                button.classList.add('invisible');
+            });
+        }
+
         function StartStream() {
 
             return new Promise((resolve, reject) => {
@@ -352,12 +465,15 @@
                         'user_message', function (event) {
                             const template = JSON.parse(event.data);
                             streamer.addMessage(template);
+                            hideDeleteButtons();
+                            htmx.process(document.body);
                     });
                     
                     eventSource.addEventListener(
                         'chunk_template', function (event) {
                             const template = JSON.parse(event.data);
                             streamer.addStreamMessage(template);
+                            htmx.process(document.body);
                     });
 
                     eventSource.addEventListener(
@@ -375,6 +491,7 @@
                             console.error('Error processing message:', error);
                             eventSource.close();
                             delete streamer;
+                            showDeleteButtons();
                             reject(error);
                         }
                     };
@@ -383,6 +500,8 @@
                         eventSource.close();
                         console.log('Stream connection closed');
                         resolve();
+                        showDeleteButtons();
+                        showSubmitButton();
                         delete streamer;
                         return;
                     });
@@ -397,6 +516,7 @@
                     eventSource.onerror = (error) => {
                         console.error('EventSource failed:', error);
                         eventSource.close();
+                        showDeleteButtons();
                         delete streamer;
                         reject(error);
                     };
@@ -480,7 +600,9 @@
                 
                 const fileNameDiv = document.createElement('div');
                 fileNameDiv.className = 'text-sm text-white truncate' + 
-                                        'w-full mx-2 truncate whitespace-nowrap overflow-hidden text-ellipsis';
+                                        'w-full mx-2 truncate' +
+                                        ' whitespace-nowrap overflow-hidden' + 
+                                        ' text-ellipsis';
                 fileNameDiv.textContent = file.name;
                 fileItemDiv.appendChild(fileNameDiv);
 
@@ -516,6 +638,14 @@
             const itemElement = document.getElementById(itemId);
             itemElement.remove();
         }
+
+        function handleKeyDown(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                document.getElementById('SubmitButton').click();
+            }
+        }
+
     </script>
 </body>
 </html>

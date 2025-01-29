@@ -45,7 +45,7 @@ class AttachmentData(BaseModel):
 
     @computed_field
     @property
-    def modality(self) -> str:
+    def format(self) -> str:
         return self.type.split('/')[0]
 
     @computed_field
@@ -59,25 +59,24 @@ class AttachmentData(BaseModel):
     @property
     def processed_content(self) -> str:
         if self.content_processed is None:
-            if self.modality in ModalsType._value2member_map_ and self.modality not in self.valid_modalities:
+            if self.format in ModalsType._value2member_map_ and self.format not in self.valid_modalities:
                 raise AttachmentProcessingError((
-                    f"Error processing for modality type: {self.modality}.\n"
+                    f"Error processing for modality type: {self.format}.\n"
                     "It seems modality is known but not valid for this Graph"))
-
-            processor = self.processor_map.get(self.modality, TextProcessor())
+            processor = self.processor_map.get(self.format, TextProcessor())
             self.content_processed = processor.process_content(self)
         
         return self.content_processed
     
     @property
     def formatted_content(self) -> str:
-        processor = self.processor_map.get(self.modality,  TextProcessor())
+        processor = self.processor_map.get(self.format,  TextProcessor())
         return processor.format_content(self)
 
     @classmethod
-    def register_processor(cls, modality: str):
+    def register_processor(cls, format: str):
         def decorator(processor):
-            cls.processor_map[modality] = processor()
+            cls.processor_map[format] = processor()
             return processor
         return decorator
     
@@ -149,12 +148,34 @@ class ImageProcessor(BaseProcessor):
         }   
 
 
+# @AttachmentData.register_processor('application')
+class AppProcessor(BaseProcessor):
+    
+    @classmethod
+    def process_content(cls, attach: AttachmentData) -> str:
+        if 'image' not in attach.valid_modalities:
+            return TextProcessor.process_content(attach)
+
+        if 'pdf' in attach.type:
+            # https://pymupdf.readthedocs.io/en/latest/pymupdf4llm/api.html#pymupdf4llm-api
+            return TextProcessor.process_content(attach)
+
+        else:
+            return TextProcessor.process_content(attach)
+        
+    @classmethod 
+    def format_content(cls, attach: AttachmentData):
+        content = attach.processed_content
+        pass
+
+
 class MessageInput(BaseModel):
 
     """ Handler for inputs from Front-end """
     
     message: str
     attachments: Optional[List[AttachmentData]] = None
+    uuid: Optional[str] = ''
 
     @property
     def content(self):
@@ -164,11 +185,27 @@ class MessageInput(BaseModel):
         return content
 
 
+class StreamHandlerError(Exception):
+    """Custom exception class for handling specific errors"""
+    def __init__(self, message):
+        self.message = message
+        # Log the error when the exception is created
+        super().__init__(self.message)
+
+
 class AsyncMessageStreamHandler:
     
     def __init__(self):
         # Dictionary of queues keyed by ID
         self.message_queues = defaultdict(asyncio.Queue)
+        self.interrupt_queues = defaultdict(asyncio.Queue)
+
+    async def put_interrupt_flag(self, id):
+        await self.interrupt_queues[id].put({"stop": True})
+
+    async def get_interrupt_flag(self, id):
+        return self.interrupt_queues[id].get_nowait()
+
 
     async def put_message(self, id: str, message: MessageInput):
         """
@@ -209,6 +246,19 @@ class AsyncMessageStreamHandler:
             # Remove the queue from the dictionary
             del self.message_queues[id]
 
+        if id in self.interrupt_queues:
+            # Get the queue object
+            queue = self.interrupt_queues[id]
+            
+            # Clear any remaining messages
+            while not queue.empty():
+                try:
+                    queue.get_nowait()
+                except asyncio.QueueEmpty:
+                    break
+                    
+            # Remove the queue from the dictionary
+            del self.interrupt_queues[id]
 
 
 class MessageOutputType(Enum):

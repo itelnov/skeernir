@@ -1,0 +1,10 @@
+{
+    "server": "ollama",
+    "model_name": "deepseek-r1:14b",
+    "sampling": {
+        "temperature": 0.1,
+        "num_ctx": 4096,
+        "num_predict": -1
+    }
+
+}

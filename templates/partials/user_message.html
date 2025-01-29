@@ -34,12 +34,26 @@
         {% endif %}
     </div>
 {% endmacro %}
-<div class="mb-1">
+<div class="mb-1" id="user-message-{{uuid}}">
     <div class="flex flex-col">
         <div class="flex justify-end m-1 w-full">
             <div class="user-message">
-                <div class="bg-indigo-800 rounded-lg py-2 px-3 text-white">
+                <div class="bg-indigo-800 rounded-lg py-2 px-3 text-white shadow-2xl">
                     {{ message | markdown_to_html | safe }}
+                    <div class="flex flex-row justify-end">
+                        <div></div>
+                        <button
+                            hx-get="/remove_message/{{uuid}}"
+                            hx-trigger="click"
+                            hx-target="#main_chat"
+                            hx-swap="outerHTML"
+                            hx-vals='js:{
+                                session_id: document.getElementById("main_chat").dataset.sessionId
+                                        }'                            
+                            class="mess-del-button bg-indigo-800 p-1 text-sm text-gray-300">
+                            delete
+                        </button>
+                    </div>
                 </div>
                 {% if attachments %}
                 <div class="flex flex-row m-2 p-2 rounded-sm ">

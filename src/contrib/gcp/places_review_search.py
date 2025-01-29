@@ -52,7 +52,7 @@ class GoogleReviewSearcher:
 
 
 if __name__ == "__main__":
-    places_api_key = "AIzaSyDUkCY-g4nVUjp2pRShlsJh8UoZ1a12Trk"
+    places_api_key = ""
     review_searcher = GoogleReviewSearcher(places_api_key)
 
     place_ids = {

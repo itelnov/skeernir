@@ -85,6 +85,22 @@ ol {
     stroke: red;
 }
 
+.mess-del-button {
+    display: none;
+}
+
+.user-message:hover .mess-del-button {
+    display: block;
+}
+
+.bot-message:hover .mess-del-button {
+    display: block;
+}
+
+.mess-del-button:hover {
+    color: red;
+}
+
 .new-conv-button:hover .new-conv-icon path {
     stroke: rgba(128, 128, 233, 0.9);
     fill: rgba(128, 128, 233, 0.9);
@@ -180,9 +196,6 @@ pre[class*=language-] > code {
 }
 
 
-
-
-
 @keyframes right-slideIn {
     0% {
       transform: translateX(100%);
@@ -210,4 +223,19 @@ animation: right-slideIn 0.5s ease-in-out forwards;
   
 .right-slide-out {
 animation: right-slideOut 0.5s ease-in-out forwards;
+}
+
+.animate-slide-in {
+    animation: slideIn 0.5s ease-out forwards;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
 }

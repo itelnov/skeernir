@@ -16,7 +16,7 @@ if p not in sys.path:
 from src.registry import tool_graph
 
 
-@tool_graph(name='gpt-4o-mini-default', tag="chat/vision API", 
+@tool_graph(name='gpt-4o-mini', tag="chat/vision API", 
             att_modals=['text', 'image'])
 def get_openaigpt(api_token=None, **kwargs):
     

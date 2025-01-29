@@ -396,14 +396,16 @@ class GraphManager:
     def __init__(
         self, 
         graph_dir: str = 'src/graphs', 
-        config_dir: str = 'configs'):
+        config_dir: str = 'configs',
+        default_graph_name: str = 'Ghost'
+        ):
         self._graphs_registry = GraphRegistry(
             graph_dir=graph_dir,
             config_dir=config_dir)
         registered_graphs = self._graphs_registry.load_graphs()
-        #TODO develop GraphRegistry to handle default graph
-        self._default_graph = list(
-            k for k in registered_graphs.keys() if "default" in k)[0]
+        self._default_graph = default_graph_name
+        # self._default_graph = list(
+        #     k for k in registered_graphs.keys() if "default" in k)[0]
         
         self._graphs: Dict[str, GraphContainer] = {}  # Holds graphs by name
         self._sessions: Dict[str, Session] = {}  # Maps session IDs to sessions

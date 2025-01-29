@@ -163,8 +163,6 @@ class AppProcessor(BaseProcessor):
         else:
             return TextProcessor.process_content(attach)
         
-
-
     @classmethod 
     def format_content(cls, attach: AttachmentData):
         content = attach.processed_content
@@ -177,6 +175,7 @@ class MessageInput(BaseModel):
     
     message: str
     attachments: Optional[List[AttachmentData]] = None
+    uuid: Optional[str] = ''
 
     @property
     def content(self):
@@ -186,11 +185,27 @@ class MessageInput(BaseModel):
         return content
 
 
+class StreamHandlerError(Exception):
+    """Custom exception class for handling specific errors"""
+    def __init__(self, message):
+        self.message = message
+        # Log the error when the exception is created
+        super().__init__(self.message)
+
+
 class AsyncMessageStreamHandler:
     
     def __init__(self):
         # Dictionary of queues keyed by ID
         self.message_queues = defaultdict(asyncio.Queue)
+        self.interrupt_queues = defaultdict(asyncio.Queue)
+
+    async def put_interrupt_flag(self, id):
+        await self.interrupt_queues[id].put({"stop": True})
+
+    async def get_interrupt_flag(self, id):
+        return self.interrupt_queues[id].get_nowait()
+
 
     async def put_message(self, id: str, message: MessageInput):
         """
@@ -231,6 +246,19 @@ class AsyncMessageStreamHandler:
             # Remove the queue from the dictionary
             del self.message_queues[id]
 
+        if id in self.interrupt_queues:
+            # Get the queue object
+            queue = self.interrupt_queues[id]
+            
+            # Clear any remaining messages
+            while not queue.empty():
+                try:
+                    queue.get_nowait()
+                except asyncio.QueueEmpty:
+                    break
+                    
+            # Remove the queue from the dictionary
+            del self.interrupt_queues[id]
 
 
 class MessageOutputType(Enum):

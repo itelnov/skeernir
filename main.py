@@ -2,6 +2,7 @@ import os
 import logging
 from uuid import uuid4
 import json
+from asyncio.queues import QueueEmpty
 
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -28,7 +29,9 @@ from langchain_core.messages import AIMessageChunk, HumanMessage, AIMessage
 from sqlalchemy import create_engine, desc
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.sql import text
+from sqlalchemy.exc import SQLAlchemyError
 from dotenv import load_dotenv 
+from langchain_core.messages import RemoveMessage
 
 import src.models as models
 from src.text_utils import MarkdownConverter
@@ -37,7 +40,8 @@ from src.registry import GraphManager
 from src.messages import (AsyncMessageStreamHandler, 
                           AttachmentData,
                           MessageInput, 
-                          AttachmentProcessingError)
+                          AttachmentProcessingError,
+                          StreamHandlerError)
 
 
 # loading variables from .env file
@@ -73,6 +77,7 @@ BOT_TEMPLATE = templates.get_template('partials/bot_message.html')
 CONV_TEMPLATE = templates.get_template('partials/conversation.html')
 RC_TEMPLATE = templates.get_template('partials/right_container.html')
 SYS_TEMPLATE = templates.get_template('partials/sys_message.html')
+PP_WARNING_TEMPLATE = templates.get_template('partials/popup_warning.html')
 
 
 def sys_message(message: str ="", message_type: str ="warning") -> str:
@@ -89,8 +94,8 @@ def send_user_message(user_message: MessageInput) -> str:
     return f"event: user_message\ndata: {data}\n\n"
 
 
-def send_chunk_template() -> str:
-    template = CHUNK_TEMPLATE.render()
+def send_chunk_template(uuid="") -> str:
+    template = CHUNK_TEMPLATE.render({"uuid": uuid})
     data = json.dumps({"content": template})
     return  f"event: chunk_template\ndata: {data}\n\n"
 
@@ -125,6 +130,15 @@ app.add_middleware(
     allow_methods=["GET", "POST"],
     allow_headers=["*"]
 )
+
+
+class CustomError(Exception):
+    """Custom exception class for handling specific errors"""
+    def __init__(self, message):
+        self.message = message
+        # Log the error when the exception is created
+        logger.error(self.message)
+        super().__init__(self.message)
 
 
 # Dependency to get database session
@@ -323,6 +337,49 @@ def create_graphlog_record(
     return graphlog_item
 
 
+def delete_message_with_attachments(db: Session, message_uuid: str) -> bool:
+    """
+    Delete a message and all its attachments from the database.
+
+    Args:
+        db: SQLAlchemy database session
+        message_uuid: UUID of the message to delete
+
+    Returns:
+        bool: True if deletion was successful, False otherwise
+
+    Raises:
+        SQLAlchemyError: If there's a database error during deletion
+    """
+    try:
+        # Start a transaction
+        with db.begin():
+            # Get the message
+            message = db.query(models.Message).filter(
+                models.Message.message_uuid == message_uuid
+            ).first()
+
+            if not message:
+                return False
+
+            # Due to cascade="all, delete-orphan" in the Message model,
+            # deleting the message will automatically delete all associated 
+            # attachments
+            db.delete(message)
+
+            # Commit the transaction
+            db.commit()
+
+        return True
+
+    except SQLAlchemyError as e:
+        # Roll back the transaction in case of error
+        db.rollback()
+        # You might want to log the error here
+        logger.info(f"Error deleting message: {str(e)}")
+        return False
+
+
 @app.get("/", response_class=RedirectResponse)
 async def root(
     request: Request,
@@ -458,36 +515,65 @@ async def register(
         })
 
 
+@app.delete('/remove-popup-warning', response_class=HTMLResponse)
+async def remove_warning():
+    return ""
+
+
+@app.get('/remove_message/{uuid}', response_class=HTMLResponse)
+async def delmess(
+    request: Request,
+    uuid: str,
+    session_id: str,
+    db: Session = Depends(get_db)):
+    
+    
+    redirect_url = request.url_for("chat", session_id=session_id)
+    if not delete_message_with_attachments(db, uuid):
+        wm = f"Smth goes wrong, check logs. Conversation restored from database"
+        redirect_url = redirect_url.include_query_params(
+            warning_message=f"{wm}")
+
+    """ Reset Graph memory """
+    session = GM.get_session(session_id)
+    config = {"configurable": {"thread_id": session_id}}
+    graphai = session.graph.graph_call
+    graphai.update_state(config, {"messages": []})    
+    response = RedirectResponse(
+            url=redirect_url, status_code=status.HTTP_302_FOUND)
+    return response
+
+
 @app.get("/newconv/{session_id}", response_class=RedirectResponse)
 async def start_newconv(
     request: Request,
     session_id: str,
-    db: Session = Depends(get_db),
 ):  
-    user = get_current_user(request, db)
-    if user:
-        try:
-            session = GM.get_session(session_id)
-            if session is None:
-                session = GM.connect_session(session_id, GM.default_graph)
-            else:
-                graphai_name = session.graph.name
-                GM.remove_session(session_id, with_graph=False)
-                await SMH.delete_queue(session_id)
-                session_id = str(uuid4())
-                GM.connect_session(session_id, graphai_name)
-        except Exception as e:
-            GM.remove_session(session_id, with_graph=True)
-            logger.error(e)
-    
-        finally:
-            redirect_url = request.url_for("chat", session_id=session_id)
-            response = RedirectResponse(
-                url=redirect_url, status_code=status.HTTP_302_FOUND)
-            return response
-    
-    return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
+    error = None
+    try:
+        session = GM.get_session(session_id)
+        if session is None:
+            session = GM.connect_session(session_id, GM.default_graph)
+        else:
+            graphai_name = session.graph.name
+            GM.remove_session(session_id, with_graph=False)
+            await SMH.delete_queue(session_id)
+            session_id = str(uuid4())
+            GM.connect_session(session_id, graphai_name)
+    except Exception as error:
+        GM.remove_session(session_id, with_graph=True)
+        await SMH.delete_queue(session_id)
+        logger.error(error)
 
+    finally:
+        redirect_url = request.url_for("chat", session_id=session_id)
+        if error:
+            redirect_url = redirect_url.include_query_params(
+                warning_message=f"{e}")
+        response = RedirectResponse(
+            url=redirect_url, status_code=status.HTTP_302_FOUND)
+        return response
+    
 
 @app.get("/loadmodel/{session_id}", response_class=RedirectResponse)
 async def loadmodel(
@@ -495,16 +581,19 @@ async def loadmodel(
     session_id: str,
     selected_graph: Optional[str] = None
 ):  
+    redirect_url = request.url_for("chat", session_id=session_id)
     try:
         GM.remove_session(session_id)
         await SMH.delete_queue(session_id)
         GM.connect_session(session_id, selected_graph)
     except Exception as e:
         GM.remove_session(session_id, with_graph=True)
+        await SMH.delete_queue(session_id)
         GM.connect_session(session_id, GM.default_graph)
+        wm = f"{e}" + "\nSee details in app logs, switch to the default graph"
+        redirect_url = redirect_url.include_query_params(warning_message=f"{wm}")
         logger.error(e)
     finally:
-        redirect_url = request.url_for("chat", session_id=session_id)
         response = RedirectResponse(
             url=redirect_url, status_code=status.HTTP_302_FOUND)
         return response
@@ -515,32 +604,13 @@ async def chat(
     request: Request,
     session_id: str,
     parent_session_id: str = "",
+    warning_message: str = "",
     db: Session = Depends(get_db),
 ):
     user = get_current_user(request, db)
     if not user:
         return RedirectResponse(
             url="/login", status_code=status.HTTP_302_FOUND)
-
-    session = GM.get_session(session_id)
-    if session is None:
-        try:
-            if not parent_session_id:
-                raise
-            # The case when session is restored from conversation history and is 
-            # not available in GraphRegistry memory. In this case we have parent 
-            # session and but can't garantee the graph used for that 
-            # conversation is now available (as for now the name of the graph 
-            # for particular conversation is not stored either). To handle this 
-            # event, we restore session with a default graph and let user to 
-            # choose the graph from available list. The parent session will be 
-            # removed.
-            GM.remove_session(parent_session_id)
-            await SMH.delete_queue(parent_session_id)
-            session = GM.connect_session(session_id, GM.default_graph)
-        except Exception as e:
-            request.session.clear()
-            return RedirectResponse(url="/", status_code=status.HTTP_302_FOUND)
 
     # restore user conversations
     user_convs = get_conversations_with_earliest_messages(db, user)
@@ -553,7 +623,26 @@ async def chat(
         )
         for conv in reversed(user_convs)
     ) if user_convs else ''
+
+    session = GM.get_session(session_id)
     
+    if session is None:
+        try:
+            graphai_name = GM.default_graph
+            if parent_session_id:
+                parent_session = GM.get_session(parent_session_id)
+                graphai_name = parent_session.graph.name
+                GM.remove_session(parent_session_id, with_graph=False)
+                await SMH.delete_queue(parent_session_id)
+            session = GM.connect_session(session_id, graphai_name)
+            
+        except Exception as e:
+            request.session.clear()
+            return RedirectResponse(
+                url=(f"/login?error_message=Smth goes wrong!\n"
+                     f"Check detailes:\n\n{e}."),
+                status_code=status.HTTP_302_FOUND)
+
     # restore current conversation history
     graph_logs_html = []
     right_container_html = ""
@@ -569,7 +658,11 @@ async def chat(
         for m in reversed(messages):
             if int(m.is_bot):
                 message_history.append(AIMessage(content=m.content))
-                prev_message = BOT_TEMPLATE.render({"bot_message": m.content})
+                prev_message = BOT_TEMPLATE.render(
+                    {
+                        "bot_message": m.content,
+                        "uuid": m.message_uuid
+                     })
                 graph_logs_records = get_message_graphlogs(db, m)
                 if graph_logs_records:
                     # There are Graph Logs in conversation, lets check if 
@@ -587,7 +680,8 @@ async def chat(
                     message=m.content, 
                     attachments=[
                         AttachmentData.restore_from_record(att) 
-                        for att in attachments])
+                        for att in attachments],
+                    uuid=m.message_uuid)
                             
                 prev_message = USER_TEMPLATE.render(user_message)
                 message_history.append(
@@ -597,15 +691,31 @@ async def chat(
 
         config = {"configurable": {"thread_id": session_id}}
         graphai = session.graph.graph_call
+        graph_memory_messages = graphai.get_state(config).values.get(
+            "messages", None)
+        if graph_memory_messages:
+            graphai.update_state(config, {"messages":[
+                RemoveMessage(id=m.id) for m in graph_memory_messages]})
+            
+        ########################################################################
+        # TODO For more advance graph flow it might be nessary to save and     #
+        # be able to deserialize not obly messages but at least the last state # 
+        # within the history of outputs (LogAttributes). Should be implemented #
+        # in future relise.                                                    #  
+        ########################################################################
+        
         graphai.update_state(config, {"messages": message_history})
-
 
     if graph_logs_html and session.graph.entries_map:
         right_container_html = RC_TEMPLATE.render(graphlogs=graph_logs_html)
 
+    if warning_message:
+        warning_message = PP_WARNING_TEMPLATE.render(
+            warning_message=warning_message)
 
     return templates.TemplateResponse(request, "main.html",
         {   
+            "warning_message": warning_message,
             "graph": f'{session.graph.name}: {session.graph.tag}',
             "user": user.username,
             "previous_messages": prev_messages_html,
@@ -615,20 +725,36 @@ async def chat(
         })
 
 
-@app.get("/delconv/{session_id}", response_class=JSONResponse)
+@app.get("/delconv/{session_id}", response_class=RedirectResponse)
 async def delconv(
     request: Request,
     session_id: str,
+    parent_session_id: str,
     db: Session = Depends(get_db),
 ):
     user = get_current_user(request, db)
     if not user:
         return RedirectResponse(
             url="/login", status_code=status.HTTP_302_FOUND)
-    conv = get_conversation(db, user, session_id)
-    delete_conversation_and_related(db, conv)
-
-    return {"status": "deleted"}
+    
+    try:
+        conv = get_conversation(db, user, session_id)
+        delete_conversation_and_related(db, conv)
+        e = f"Conversation {conv.session_uuid} was deleted from database"
+        if session_id == parent_session_id:
+            GM.remove_session(parent_session_id, with_graph=True)
+            await SMH.delete_queue(parent_session_id)
+            session_id = str(uuid4())
+        else:
+            session_id = parent_session_id
+    except Exception as e:
+        logger.error(e)
+    finally:
+        redirect_url = request.url_for("chat", session_id=session_id)
+        redirect_url = redirect_url.include_query_params(warning_message=f"{e}")
+        response = RedirectResponse(
+            url=redirect_url, status_code=status.HTTP_302_FOUND)
+        return response
 
 
 @app.get("/select_graph/{session_id}", response_class=HTMLResponse)
@@ -711,6 +837,16 @@ async def send_input_message(
     return JSONResponse({"status": "processing_started"})
 
 
+
+@app.post("/hardstopstream/{session_id}", response_class=JSONResponse)
+async def send_input_message(
+    request: Request,
+    session_id: str,
+):
+    await SMH.put_interrupt_flag(session_id)
+    return JSONResponse({"status": "processing_stop"})
+
+
 def process_chunk(
     db: Session,
     message_uuid: str,
@@ -747,6 +883,14 @@ def process_chunk(
                         yield (f"event: agent_log\ndata: {data}\n\n", "")
 
 
+async def check_stop_signal(queue, session_id):
+    try:
+        red_flag = queue[session_id].get_nowait()
+        return red_flag.get("stop", False)
+    except QueueEmpty:
+        return False
+    
+
 @app.get("/stream/{session_id}", response_class=StreamingResponse)
 async def stream_endpoint(
     request: Request,
@@ -767,10 +911,10 @@ async def stream_endpoint(
         """ Direct stream data for a specific session """
         try:
             user_message = await SMH.get_queue(session_id)
-            user_message_uuid = str(uuid4())
+            user_message.uuid = str(uuid4())
             
             db.add(create_message_record(
-                user_message_uuid,
+                user_message.uuid,
                 user_message.message,
                 conv, 
                 is_bot=False))
@@ -787,7 +931,7 @@ async def stream_endpoint(
                 # Create and add attachment records to db
                 db.add_all([
                     create_attachment_record(
-                        message_uuid=user_message_uuid,
+                        message_uuid=user_message.uuid,
                         conv=conv,
                         attch=attch
                     ) for attch in user_message.attachments
@@ -799,17 +943,21 @@ async def stream_endpoint(
             
             # Here we send only html template where the content will be 
             # streamed
-            yield send_chunk_template()
+            bot_message_uuid = str(uuid4())
+            yield send_chunk_template(bot_message_uuid)
 
             config = {"configurable": {"thread_id": session_id}}
             bot_message = ''
-            bot_message_uuid = str(uuid4())
 
             async for chunk_type, stream_data in graphai.astream(
                 {"messages": [input_message]}, 
                 config=config,
                 stream_mode=["messages", "values"]):
                 
+                # Check for stop signal again after each chunk processing
+                if await check_stop_signal(SMH.interrupt_queues, session_id):
+                    raise StreamHandlerError("User stopped streaming!")
+
                 for out in process_chunk(
                     db=db,
                     message_uuid=bot_message_uuid,
@@ -822,6 +970,7 @@ async def stream_endpoint(
 
                     yield to_post
             
+
             bot_message_item = create_message_record(
                 message_uuid=bot_message_uuid,
                 message=bot_message, 
@@ -829,7 +978,12 @@ async def stream_endpoint(
                 is_bot=True)
             db.add(bot_message_item)
             db.commit()
-    
+
+        except StreamHandlerError as e:
+            yield sys_message(
+                message=(f"{e}"),
+                message_type="warning")
+
         except AttachmentProcessingError as e:
             yield sys_message(
                 message=(

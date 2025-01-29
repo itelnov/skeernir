@@ -3,7 +3,7 @@
      id="conv-{{session_id}}">
     <button
         hx-get="/main/{{session_id}}"
-        hx-target="#main_chat"
+        hx-target="body"
         hx-trigger="click"
         hx-swap="outerHTML"
         hx-push-url="true"
@@ -17,9 +17,10 @@
     </button>
     <button
         hx-get="/delconv/{{session_id}}"
-        hx-target="#conv-{{session_id}}"
+        hx-target="#main_chat"
         hx-trigger="click"
-        hx-swap="delete"
+        hx-swap="outerHTML"
+        hx-vals='{"parent_session_id": "{{parent_session_id}}"}'
         class="conv-del-button bg-gray-900">
             <div class="mx-2">
                 <svg width="20px" height="20px" viewBox="0 0 24 24" fill="none" class="del-icon">

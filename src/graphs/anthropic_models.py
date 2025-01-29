@@ -42,7 +42,7 @@ def get_claude(api_token=None, **kwargs):
     # Return compiled graph and resorces (processes which run server / clients)
     # to let GraphManager properly handle them
     return workflow.compile(checkpointer=memory), model
-
+# checkpointer=memory
 
 if __name__ == "__main__":
     

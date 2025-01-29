@@ -1,11 +1,13 @@
-# <img src="static/assets/logo.png" alt="drawing" width="50"/> Skeernir
+<div style="text-align: center;">
+<img src="static/assets/skeernir_winter_logo.png" alt="drawing"/>
 
 ![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-orange.svg)
-![Version](https://img.shields.io/badge/version-0.1.0-red.svg)
-<!-- ![Stars](https://img.shields.io/github/stars/itelnov/skeernir.svg)
+<!-- ![Version](https://img.shields.io/badge/version-0.1.0-beta2-red.svg)
+![Stars](https://img.shields.io/github/stars/itelnov/skeernir.svg)
 ![Forks](https://img.shields.io/github/forks/itelnov/skeernir.svg)
 ![Issues](https://img.shields.io/github/issues/itelnov/skeernir.svg) -->
+</div>
 
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[Installation](#Installation)
 
@@ -21,6 +23,7 @@ Oh great! Just what we needed - yet another UI for locally deployed models... BU
 <div style="text-align: center;">
     <img src="static/assets/demo1c.gif" alt="drawing" width="712"/>
     <img src="static/assets/demo2c.gif" alt="drawing" width="712"/>
+    <img src="static/assets/demo3c.gif" alt="drawing" width="712"/>
 </div>
 
 ### Why does this even exist?  
@@ -45,7 +48,7 @@ from langgraph.checkpoint.memory import MemorySaver
 
 from src.registry import tool_graph
 
-@tool_graph(name='gpt-4o-mini-default', tag="chat/vision API", att_modals=['text', 'image'])
+@tool_graph(name='gpt-4o-mini', tag="chat/vision API", att_modals=['text', 'image'])
 def get_openaigpt(api_token=None, **kwargs):
     
     memory = MemorySaver()
@@ -73,7 +76,7 @@ def get_openaigpt(api_token=None, **kwargs):
 
 In addition to compiled graph the function returns client instance to properly clean memory when you switch to another graph, however it's not obligatory. 
 
-For this simple case the config file `configs/gpt-4o-mini-default.json` should contain:
+For this simple case the config file `configs/gpt-4o-mini.json` should contain:
 
 ```json
 {

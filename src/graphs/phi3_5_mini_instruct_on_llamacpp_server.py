@@ -19,7 +19,7 @@ from src.registry import tool_graph, terminate_processes
 from src.graphs.utils import LlamaCppClient, run_server, check_server_healthy
 
 
-@tool_graph(name='phi3_5-mini-instruct', tag="chat")
+# @tool_graph(name='phi3_5-mini-instruct', tag="chat")
 def get_phi3_5_on_llamacpp_server(
     server: str,
     model_path: str,

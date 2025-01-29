@@ -28,7 +28,7 @@ https://github.com/ollama/ollama/blob/main/docs/modelfile.md#build-from-a-gguf-f
 """
 
 
-@tool_graph(name='deepseekR1_14b_ollama', tag="chat/vision API", att_modals=['text'])
+# @tool_graph(name='deepseekR1_14b_ollama', tag="chat", att_modals=['text'])
 def get_deepseekr1_on_ollama_server(
         server: str,
         model_name: str,

@@ -76,7 +76,7 @@ def get_openaigpt(api_token=None, **kwargs):
 
 In addition to compiled graph the function returns client instance to properly clean memory when you switch to another graph, however it's not obligatory. 
 
-For this simple case the config file `configs/gpt-4o-mini-default.json` should contain:
+For this simple case the config file `configs/gpt-4o-mini.json` should contain:
 
 ```json
 {

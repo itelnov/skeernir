@@ -17,7 +17,7 @@ from src.graphs.utils import (
     OpenAICompatibleChatModel, run_server, check_server_healthy)
 
 
-@tool_graph(name='llama3_2_3b_on_vllm_server', tag="chat", att_modals=['text'])
+# @tool_graph(name='llama3_2_3b_on_vllm_server', tag="chat", att_modals=['text'])
 def get_llama3_2_b3_on_vllm_server(
     server: str,
     model_path: str,

@@ -22,8 +22,8 @@ from src.graphs.utils import (
     OllamaClientWrapper, run_server, check_server_healthy)
 
 
-@tool_graph(name='llama3_2_vision_11b_ollama', tag="chat/vision API", 
-            att_modals=['text', 'image'])
+# @tool_graph(name='llama3_2_vision_11b_ollama', tag="chat/vision API", 
+#             att_modals=['text', 'image'])
 def get_llama3_2_vision_11b_on_ollama_server(
     
         server: str,

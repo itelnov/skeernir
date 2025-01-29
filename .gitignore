@@ -7,7 +7,7 @@ __pycache__/
 *.so
 
 # json configs
-configs/gpt-4o-mini-default.json
+configs/gpt-4o-mini.json
 configs/openai-rag-corrective.json
 configs/Sonnet35.json
 tailwindcss-linux-x64

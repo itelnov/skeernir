@@ -38,26 +38,26 @@
                         hx-swap="innerHTML"
                         type=""
                         class="user-button"
-                        hx-on::before-request="
-                            document.getElementById('left-panel').classList.add('left-slide-in');">
-                            <svg class="user-icon" width="25px" height="25px" viewBox="0 0 24 24" fill="none">
+                        hx-on::before-request="document.getElementById('left-panel').classList.add('left-slide-in');">
+                        <svg class="user-icon" width="25px" height="25px" viewBox="0 0 24 24" fill="none">
                             <path d="M16.0724 4.02447C15.1063 3.04182 13.7429 2.5 12.152 2.5C10.5611 2.5 9.19773 3.04182 8.23167 4.02447C7.26636 5.00636 6.73644 6.38891 6.73644 8C6.73644 10.169 7.68081 11.567 8.8496 12.4062C9.07675 12.5692 9.3115 12.7107 9.54832 12.8327C8.24215 13.1916 7.18158 13.8173 6.31809 14.5934C4.95272 15.8205 4.10647 17.3993 3.53633 18.813C3.43305 19.0691 3.55693 19.3604 3.81304 19.4637C4.06914 19.567 4.36047 19.4431 4.46375 19.187C5.00642 17.8414 5.78146 16.4202 6.98653 15.3371C8.1795 14.265 9.82009 13.5 12.152 13.5C14.332 13.5 15.9058 14.1685 17.074 15.1279C18.252 16.0953 19.0453 17.3816 19.6137 18.6532C19.9929 19.5016 19.3274 20.5 18.2827 20.5H6.74488C6.46874 20.5 6.24488 20.7239 6.24488 21C6.24488 21.2761 6.46874 21.5 6.74488 21.5H18.2827C19.9348 21.5 21.2479 19.8588 20.5267 18.2452C19.9232 16.8952 19.0504 15.4569 17.7087 14.3551C16.9123 13.7011 15.9603 13.1737 14.8203 12.8507C15.43 12.5136 15.9312 12.0662 16.33 11.5591C17.1929 10.462 17.5676 9.10016 17.5676 8C17.5676 6.38891 17.0377 5.00636 16.0724 4.02447ZM15.3593 4.72553C16.1144 5.49364 16.5676 6.61109 16.5676 8C16.5676 8.89984 16.2541 10.038 15.544 10.9409C14.8475 11.8265 13.7607 12.5 12.152 12.5C11.5014 12.5 10.3789 12.2731 9.43284 11.5938C8.51251 10.933 7.73644 9.83102 7.73644 8C7.73644 6.61109 8.18963 5.49364 8.94477 4.72553C9.69916 3.95818 10.7935 3.5 12.152 3.5C13.5105 3.5 14.6049 3.95818 15.3593 4.72553Z" stroke="#FFFFFF"/>
                         </svg>
                     </button>
                 </div>
                 <div class="flex flex-row justify-center py-2">
-                    <button hx-post="/logout"
-                            hx-target="#main_chat"
-                            hx-redirect="/"
-                            hx-swap="outerHTML"
-                            hx-push-url="true"
-                            type="submit"
-                            class="sign-out-button">
-                        <svg class="sign-out-icon" width="25px" height="25px" viewBox="0 0 24 24" fill="none">
-                            <path d="M8.00195 7C8.01406 4.82497 8.11051 3.64706 8.87889 2.87868C9.75757 2 11.1718 2 14.0002 2H15.0002C17.8286 2 19.2429 2 20.1215 2.87868C21.0002 3.75736 21.0002 5.17157 21.0002 8V16C21.0002 18.8284 21.0002 20.2426 20.1215 21.1213C19.2429 22 17.8286 22 15.0002 22H14.0002C11.1718 22 9.75757 22 8.87889 21.1213C8.11051 20.3529 8.01406 19.175 8.00195 17" stroke="#FFFFFF" stroke-width="1.5" stroke-linecap="round"/>
-                            <path d="M8 19.5C5.64298 19.5 4.46447 19.5 3.73223 18.7678C3 18.0355 3 16.857 3 14.5V9.5C3 7.14298 3 5.96447 3.73223 5.23223C4.46447 4.5 5.64298 4.5 8 4.5" stroke="#FFFFFF" stroke-width="1.5"/>
-                            <path d="M15 12L6 12M6 12L8 14M6 12L8 10" stroke="#FFFFFF" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                        </svg>
+                    <button 
+                        hx-post="/logout"
+                        hx-target="#main_chat"
+                        hx-redirect="/"
+                        hx-swap="outerHTML"
+                        hx-push-url="true"
+                        type="submit"
+                        class="sign-out-button">
+                            <svg class="sign-out-icon" width="25px" height="25px" viewBox="0 0 24 24" fill="none">
+                                <path d="M8.00195 7C8.01406 4.82497 8.11051 3.64706 8.87889 2.87868C9.75757 2 11.1718 2 14.0002 2H15.0002C17.8286 2 19.2429 2 20.1215 2.87868C21.0002 3.75736 21.0002 5.17157 21.0002 8V16C21.0002 18.8284 21.0002 20.2426 20.1215 21.1213C19.2429 22 17.8286 22 15.0002 22H14.0002C11.1718 22 9.75757 22 8.87889 21.1213C8.11051 20.3529 8.01406 19.175 8.00195 17" stroke="#FFFFFF" stroke-width="1.5" stroke-linecap="round"/>
+                                <path d="M8 19.5C5.64298 19.5 4.46447 19.5 3.73223 18.7678C3 18.0355 3 16.857 3 14.5V9.5C3 7.14298 3 5.96447 3.73223 5.23223C4.46447 4.5 5.64298 4.5 8 4.5" stroke="#FFFFFF" stroke-width="1.5"/>
+                                <path d="M15 12L6 12M6 12L8 14M6 12L8 10" stroke="#FFFFFF" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
                     </button>
                 </div>
             </div>
@@ -65,8 +65,7 @@
         <div id="user_settings" class="flex bg-gray-500">
         </div>
         <div id="left-panel" class="flex flex-col w-56 rounded-r-lg bg-gray-900 relative">
-            <div class="flex flex-col rounded text-left truncate 
-                        whitespace-nowrap overflow-y-auto text-ellipsis p-2">
+            <div class="flex flex-col rounded text-left truncate whitespace-nowrap overflow-y-auto text-ellipsis p-2">
                 <button
                     id="dropdown-button"
                     type="text"
@@ -75,8 +74,7 @@
                     hx-trigger="input changed delay:200ms, focus"
                     hx-target="#dropdown-menu"
                     hx-swap="innerHTML"
-                    hx-on::before-request="
-                        handleGraphSelector();">
+                    hx-on::before-request="handleGraphSelector();">
                     {{graph}}
                 </button>
                 <div>
@@ -93,7 +91,7 @@
                     {{ previous_messages | safe }}
                 </div>
                 <div class="flex justify-center mt-4">
-                    <div id="chat-input-container", class="w-full">
+                    <div id="chat-input-container" class="w-full">
                         <form id="submit_form" class="static"
                             hx-post="/sendmessage/{{session_id}}"
                             hx-trigger="click from:#SubmitButton"
@@ -110,44 +108,19 @@
                                 noFilesDiv.textContent = 'No files attached';
                                 fileListContainer.appendChild(noFilesDiv);
                                 showStopButton();"
-                            hx-on::after-request="
-                                console.log('after-request');
-                                StartStream()
-                                    .then(() => {
-                                        console.log('Stream is ready');
-                                    })
-                                    .catch((error) => console.log(
-                                        'Stream start failed', error));
-                                "
+                            hx-on::after-request="StartStream();"
                             hx-swap="none">
                             <div class="relative">
-                                <div class="pb-10 bg-gray-700 overflow-hidden 
-                                    rounded-t-xl rounded-b-3xl border-gray-400">
-                                    <textarea
-                                        id="user_input"
-                                        name="message"
-                                        value=""
-                                        placeholder="Type your message..."
-                                        rows="1"
-                                        class="rounded-lg min-h-12 max-h-40 p-3 w-full focus:outline-none resize-y"
-                                        oninput="
-                                            this.style.height = 'auto';
-                                            this.style.height = this.scrollHeight + 'px'
-                                            "
-                                        required
-                                        autofocus
-                                        onkeydown="handleKeyDown(event)">
-                                    </textarea>
+                                <div class="pb-10 bg-gray-700 overflow-hidden rounded-t-xl rounded-b-3xl border-gray-400">
+                                    <textarea id="user_input" name="message" value="" placeholder="Type your message..." rows="1" class="rounded-lg min-h-12 max-h-40 p-3 w-full focus:outline-none resize-y" onkeydown="handleKeyDown(event)" required autofocus></textarea>
                                 </div>
                                 <div class="absolute bottom-0 right-0">
                                     <button
                                         id="SubmitButton"
                                         type="submit"
-                                        class="submit-button-icon bg-gray-400 px-2 py-2 
-                                            rounded-full hover:shadow-md hover:shadow-blue-400
-                                            transition-colors flex-shrink-0">
-                                        <svg width="25px" height="25px" viewBox="-0.5 0 25 25" fill="FFFFFF" xmlns="http://www.w3.org/2000/svg">
-                                        <path d="M9.16109 12.9424L2.91109 12.4324C2.42109 12.3124 2.35109 11.6724 2.80109 11.4624L20.7111 3.55243C21.1811 3.34243 21.6711 3.81243 21.4411 4.25243L13.0111 21.2124C12.7811 21.6424 12.1211 21.5724 12.0011 21.1124L11.1711 13.2124L18.4411 6.41243" stroke="#000000" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
+                                        class="submit-button-icon bg-gray-400 px-2 py-2 rounded-full hover:shadow-md hover:shadow-blue-400 transition-colors flex-shrink-0">
+                                        <svg width="25px" height="25px" viewBox="-0.5 0 25 25" fill="FFFFFF">
+                                            <path d="M9.16109 12.9424L2.91109 12.4324C2.42109 12.3124 2.35109 11.6724 2.80109 11.4624L20.7111 3.55243C21.1811 3.34243 21.6711 3.81243 21.4411 4.25243L13.0111 21.2124C12.7811 21.6424 12.1211 21.5724 12.0011 21.1124L11.1711 13.2124L18.4411 6.41243" stroke="#000000" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"/>
                                         </svg>
                                     </button>
                                 </div>
@@ -157,22 +130,16 @@
                                         hx-trigger="click"
                                         id="HardStopButton"
                                         type="button"
-                                        class="hidden bg-gray-400 px-2 py-2 
-                                            rounded-full hover:bg-gray-500
-                                            transition-colors flex-shrink-0 animate-pulse">
-                                            <svg height="25px" width="25px" version="1.1" id="Capa_1" viewBox="0 0 30.05 30.05" xml:space="preserve">
-                                                <g>
-                                                    <path style="fill:#030104;" d="M18.993,10.688h-7.936c-0.19,0-0.346,0.149-0.346,0.342v8.022c0,0.189,0.155,0.344,0.346,0.344   h7.936c0.19,0,0.344-0.154,0.344-0.344V11.03C19.336,10.838,19.183,10.688,18.993,10.688z"/>
-                                                    <path style="fill:#030104;" d="M15.026,0C6.729,0,0.001,6.726,0.001,15.025S6.729,30.05,15.026,30.05   c8.298,0,15.023-6.726,15.023-15.025S23.324,0,15.026,0z M15.026,27.54c-6.912,0-12.516-5.604-12.516-12.515   c0-6.914,5.604-12.517,12.516-12.517c6.913,0,12.514,5.603,12.514,12.517C27.54,21.936,21.939,27.54,15.026,27.54z"/>
-                                                </g>
-                                            </svg>
+                                        class="hidden bg-gray-400 px-2 py-2 rounded-full hover:bg-gray-500 transition-colors flex-shrink-0 animate-pulse">
+                                        <svg height="25px" width="25px" version="1.1" id="Capa_1" viewBox="0 0 30.05 30.05" xml:space="preserve">
+                                            <g>
+                                                <path style="fill:#030104;" d="M18.993,10.688h-7.936c-0.19,0-0.346,0.149-0.346,0.342v8.022c0,0.189,0.155,0.344,0.346,0.344   h7.936c0.19,0,0.344-0.154,0.344-0.344V11.03C19.336,10.838,19.183,10.688,18.993,10.688z"/>
+                                                <path style="fill:#030104;" d="M15.026,0C6.729,0,0.001,6.726,0.001,15.025S6.729,30.05,15.026,30.05   c8.298,0,15.023-6.726,15.023-15.025S23.324,0,15.026,0z M15.026,27.54c-6.912,0-12.516-5.604-12.516-12.515   c0-6.914,5.604-12.517,12.516-12.517c6.913,0,12.514,5.603,12.514,12.517C27.54,21.936,21.939,27.54,15.026,27.54z"/>
+                                            </g>
+                                        </svg>
                                     </button>
-                                </div>                                
-                                
-                                <div class="absolute bottom-0 left-0 px-2
-                                            py-2 bg-gray-400 rounded-full
-                                            hover:shadow-md hover:shadow-blue-400 transition-colors 
-                                            flex-shrink-0" >
+                                </div>
+                                <div class="absolute bottom-0 left-0 px-2 py-2 bg-gray-400 rounded-full hover:shadow-md hover:shadow-blue-400 transition-colors flex-shrink-0" >
                                     <label for="files-attached">
                                         <svg width="25px" height="25px" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                                             <path d="M11.7716 3.74346C14.113 1.39988 17.912 1.39988 20.2552 3.74302C22.4625 5.95037 22.5904 9.4497 20.639 11.8068C20.1751 11.5505 19.6767 11.3493 19.1524 11.2119L19.1964 11.1679C20.9519 9.41028 20.9519 6.56104 19.1945 4.80368C17.4921 3.10124 14.7649 3.04804 12.9984 4.64408L12.8305 4.80368L12.818 4.81799L3.28167 14.3543C2.98878 14.6472 2.51391 14.6472 2.22101 14.3543C1.95475 14.0881 1.93054 13.6714 2.14839 13.3778L2.22101 13.2937L11.7699 3.74302L11.7716 3.74346Z" fill="#212121"/>
@@ -180,20 +147,12 @@
                                             <path d="M23 17.5C23 20.5376 20.5376 23 17.5 23C14.4624 23 12 20.5376 12 17.5C12 14.4624 14.4624 12 17.5 12C20.5376 12 23 14.4624 23 17.5ZM14.5 17C14.2239 17 14 17.2239 14 17.5C14 17.7761 14.2239 18 14.5 18H19.2929L17.6464 19.6464C17.4512 19.8417 17.4512 20.1583 17.6464 20.3536C17.8417 20.5488 18.1583 20.5488 18.3536 20.3536L20.8536 17.8536C21.0488 17.6583 21.0488 17.3417 20.8536 17.1464L18.3536 14.6464C18.1583 14.4512 17.8417 14.4512 17.6464 14.6464C17.4512 14.8417 17.4512 15.1583 17.6464 15.3536L19.2929 17L14.5 17Z" fill="#212121"/>
                                         </svg>
                                     </label>
-                                    <input
-                                        type="file"
-                                        id="files-attached"
-                                        name="file"
-                                        max="20971520"
-                                        multiple
-                                        class="hidden"
-                                        onchange="updateFileList(this)">
+                                    <input type="file" id="files-attached" name="file" max="20971520" multiple class="hidden" onchange="updateFileList(this)">
                                 </div>
                             </div>
                         </form>
                         <div id="file-list"
-                            class="bottom-0 bg-gray-900 mt-2 p-2 w-72
-                                max-h-20 rounded-lg overflow-y-auto">
+                            class="bottom-0 bg-gray-900 mt-2 p-2 w-72 max-h-20 rounded-lg overflow-y-auto">
                             <div class="text-sm text-gray-500">No files attached</div>
                         </div>
                     </div>

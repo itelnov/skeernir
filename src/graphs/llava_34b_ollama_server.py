@@ -28,8 +28,8 @@ https://github.com/ollama/ollama/blob/main/docs/modelfile.md#build-from-a-gguf-f
 """
 
 
-@tool_graph(name='llava_34b_ollama', tag="chat/vision API", 
-            att_modals=['text', 'image'])
+# @tool_graph(name='llava_34b_ollama', tag="chat/vision API", 
+#             att_modals=['text', 'image'])
 def get_llava_34b_on_ollama_server(
         server: str,
         model_name: str,

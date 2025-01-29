@@ -1244,16 +1244,6 @@ video {
   box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
 }
 
-.shadow-sky-300 {
-  --tw-shadow-color: #7dd3fc;
-  --tw-shadow: var(--tw-shadow-colored);
-}
-
-.shadow-sky-600 {
-  --tw-shadow-color: #0284c7;
-  --tw-shadow: var(--tw-shadow-colored);
-}
-
 .shadow-sky-800 {
   --tw-shadow-color: #075985;
   --tw-shadow: var(--tw-shadow-colored);
@@ -1555,6 +1545,17 @@ pre[class*=language-] > code {
 
 .hover\:underline:hover {
   text-decoration-line: underline;
+}
+
+.hover\:shadow-md:hover {
+  --tw-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --tw-shadow-colored: 0 4px 6px -1px var(--tw-shadow-color), 0 2px 4px -2px var(--tw-shadow-color);
+  box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
+}
+
+.hover\:shadow-blue-400:hover {
+  --tw-shadow-color: #60a5fa;
+  --tw-shadow: var(--tw-shadow-colored);
 }
 
 .focus\:outline-none:focus {

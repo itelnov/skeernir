@@ -1,18 +1,31 @@
 import io
+import os
+import re
 import requests
 import base64
+import tempfile
 import asyncio
 from typing import Dict, List, Optional, Any, ClassVar, ClassVar, Union
 from collections import defaultdict
 from abc import ABC, abstractmethod
-from enum import Enum
-from pydantic import BaseModel, computed_field
+from pydantic import BaseModel, computed_field, AnyUrl
 from markitdown import MarkItDown
-from fastapi.templating import Jinja2Templates
-import json
+from pathlib import Path
 
 from src import models
 from src.registry import ModalsType
+
+try:
+    from docling.datamodel.base_models import InputFormat
+    from docling.document_converter import DocumentConverter, WordFormatOption
+    from docling.pipeline.simple_pipeline import SimplePipeline
+    from docling_core.types.doc import ImageRefMode, PictureItem, TableItem
+    from docling.datamodel.base_models import DocumentStream
+    DOCLING_AVAILABLE = True
+except ImportError:
+    DOCLING_AVAILABLE = False
+
+
 
 # Custom exceptions
 class AttachmentProcessingError(Exception):
@@ -55,7 +68,7 @@ class AttachmentData(BaseModel):
             self.content_size = len(self.content)
         return self.content_size
 
-    @computed_field
+    # @computed_field
     @property
     def processed_content(self) -> str:
         if self.content_processed is None:
@@ -69,7 +82,7 @@ class AttachmentData(BaseModel):
         return self.content_processed
     
     @property
-    def formatted_content(self) -> str:
+    def formatted_content(self) -> List[str]:
         processor = self.processor_map.get(self.format,  TextProcessor())
         return processor.format_content(self)
 
@@ -121,8 +134,10 @@ class TextProcessor(BaseProcessor):
                 f"Error processing text for {attach.filename}: \n\n{str(e)}")
 
     @classmethod
-    def format_content(cls, attach: AttachmentData)-> Dict[str, str]:
-        return {"type": "text", "text": attach.processed_content}
+    def format_content(cls, attach: AttachmentData)-> List[Dict[str, str]] :
+        return [
+            {"type": "text", "text": attach.processed_content}
+            ]
 
 
 @AttachmentData.register_processor('image')
@@ -139,34 +154,110 @@ class ImageProcessor(BaseProcessor):
                 f"Error processing image for {str(attach.filename)} :\n\n {e}")
 
     @classmethod
-    def format_content(cls, attach: AttachmentData)-> Dict[str, str | Dict[str, str]]:
-        return  {
+    def format_content(cls, attach: AttachmentData)-> List[Dict[str, str]]:
+        return  [
+            {
             "type": "image_url",
             "image_url": {
                 "url": f"data:{attach.type};base64,{attach.processed_content}"
             }
-        }   
+        }]
 
 
-# @AttachmentData.register_processor('application')
+def if_available(flag, processor_name):
+    def wrapper(cls):
+        if flag:
+            return AttachmentData.register_processor(processor_name)(cls)
+        return cls
+    return wrapper
+
+
+@if_available(DOCLING_AVAILABLE, processor_name="application")
 class AppProcessor(BaseProcessor):
     
+    @classmethod
+    def docx_pptx_to_markdown(cls, attach: AttachmentData) -> str:
+        try:
+            doc_converter = (
+                DocumentConverter(
+                    allowed_formats=[
+
+                        InputFormat.DOCX,
+                        InputFormat.PPTX,
+                    ],
+                    format_options={
+                        InputFormat.DOCX: WordFormatOption(
+                            pipeline_cls=SimplePipeline  # , backend=MsWordDocumentBackend
+                        ),
+                    },
+                )
+            )
+            stream_inputs = DocumentStream(
+                name="attachment",
+                stream=io.BytesIO(attach.content))
+            conv_result = doc_converter.convert(stream_inputs)
+            page = "Slide" if "presentation" in attach.type else "Page"
+            
+            if conv_result.document.pages.items():
+                processed_content = ""
+                for page_no, _ in conv_result.document.pages.items():
+                    processed_content += f"\n\n{page} {page_no}\n"
+                    md_out = conv_result.document.export_to_markdown(
+                        image_mode=ImageRefMode.EMBEDDED,
+                        page_no=page_no)
+                    processed_content += md_out
+            else:            
+                processed_content = conv_result.document.export_to_markdown(
+                    image_mode=ImageRefMode.EMBEDDED)
+            return processed_content
+    
+        except Exception as e:
+            raise AttachmentProcessingError(
+                f"Error processing image for {str(attach.filename)} :\n\n {e}")
+
+
     @classmethod
     def process_content(cls, attach: AttachmentData) -> str:
         if 'image' not in attach.valid_modalities:
             return TextProcessor.process_content(attach)
-
+        
         if 'pdf' in attach.type:
             # https://pymupdf.readthedocs.io/en/latest/pymupdf4llm/api.html#pymupdf4llm-api
             return TextProcessor.process_content(attach)
-
-        else:
-            return TextProcessor.process_content(attach)
         
-    @classmethod 
-    def format_content(cls, attach: AttachmentData):
-        content = attach.processed_content
-        pass
+        if 'officedocument' in attach.type:
+            return cls.docx_pptx_to_markdown(attach)
+
+
+    @classmethod
+    def format_content(cls, attach: AttachmentData)-> List[Dict[str, str]]:
+        
+        db_aligned_content = attach.processed_content
+        
+        blocks = []
+        def process_code_block(match):
+            img64 = match.group(1)  # Language is now in group 1
+            blocks.append(img64.replace("![Image](", "")[:-1])
+            placeholder = f'<!-- Image {len(blocks)} -->'
+            return placeholder
+
+        image_patter = r'(!\[Image]\([^)]+\))'
+
+        processed_content = re.sub(
+            image_patter, 
+            process_code_block, 
+            db_aligned_content, 
+            flags=re.DOTALL)
+        out = [{"type": "text", "text": processed_content}]
+        if blocks:
+            for el in blocks:
+                out.append(
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": el}
+                    })
+
+        return out
 
 
 class MessageInput(BaseModel):
@@ -205,7 +296,6 @@ class AsyncMessageStreamHandler:
 
     async def get_interrupt_flag(self, id):
         return self.interrupt_queues[id].get_nowait()
-
 
     async def put_message(self, id: str, message: MessageInput):
         """
@@ -261,92 +351,92 @@ class AsyncMessageStreamHandler:
             del self.interrupt_queues[id]
 
 
-class MessageOutputType(Enum):
-    USER = "user"
-    BOT = "bot"
-    CHUNK = "chunk"
-    SYSTEM = "sys"
-    CONVERSATION = "conv"
-    RIGHT_CONTAINER = "right_container"
+# class MessageOutputType(Enum):
+#     USER = "user"
+#     BOT = "bot"
+#     CHUNK = "chunk"
+#     SYSTEM = "sys"
+#     CONVERSATION = "conv"
+#     RIGHT_CONTAINER = "right_container"
 
 
-class TemplateConfig(BaseModel):
-    template_name: str
-    event_name: str
+# class TemplateConfig(BaseModel):
+#     template_name: str
+#     event_name: str
     
-    # Add model configuration
-    model_config = {
-        "frozen": True,  # Makes instances immutable
-        "extra": "forbid"  # Prevents additional attributes
-    }
+#     # Add model configuration
+#     model_config = {
+#         "frozen": True,  # Makes instances immutable
+#         "extra": "forbid"  # Prevents additional attributes
+#     }
 
 
-class TemplateRegistry:
-    def __init__(self, template_dir: str = "templates"):
-        self.templates = Jinja2Templates(directory=template_dir)
+# class TemplateRegistry:
+#     def __init__(self, template_dir: str = "templates"):
+#         self.templates = Jinja2Templates(directory=template_dir)
         
-        # Configure template mappings
-        self._template_configs = {
-            MessageOutputType.USER: TemplateConfig(
-                template_name="partials/user_message.html", 
-                event_name="user_template"),
-            MessageOutputType.BOT: TemplateConfig(
-                template_name="partials/bot_message.html", 
-                event_name="bot_template"),
-            MessageOutputType.CHUNK: TemplateConfig(
-                template_name="partials/chunk_message.html", 
-                event_name="chunk_template"),
-            MessageOutputType.SYSTEM: TemplateConfig(
-                template_name="partials/sys_message.html", 
-                event_name="system_template"),
-            MessageOutputType.CONVERSATION: TemplateConfig(
-                template_name="partials/conversation.html", 
-                event_name="conversation_template"),
-            MessageOutputType.RIGHT_CONTAINER: TemplateConfig(
-                template_name="partials/right_container.html", 
-                event_name="right_container_template")
-        }
+#         # Configure template mappings
+#         self._template_configs = {
+#             MessageOutputType.USER: TemplateConfig(
+#                 template_name="partials/user_message.html", 
+#                 event_name="user_template"),
+#             MessageOutputType.BOT: TemplateConfig(
+#                 template_name="partials/bot_message.html", 
+#                 event_name="bot_template"),
+#             MessageOutputType.CHUNK: TemplateConfig(
+#                 template_name="partials/chunk_message.html", 
+#                 event_name="chunk_template"),
+#             MessageOutputType.SYSTEM: TemplateConfig(
+#                 template_name="partials/sys_message.html", 
+#                 event_name="system_template"),
+#             MessageOutputType.CONVERSATION: TemplateConfig(
+#                 template_name="partials/conversation.html", 
+#                 event_name="conversation_template"),
+#             MessageOutputType.RIGHT_CONTAINER: TemplateConfig(
+#                 template_name="partials/right_container.html", 
+#                 event_name="right_container_template")
+#         }
         
-        # Load all templates at initialization
-        self._message_templates = {
-            msg_type: self.templates.get_template(config.template_name)
-            for msg_type, config in self._template_configs.items()
-        }
+#         # Load all templates at initialization
+#         self._message_templates = {
+#             msg_type: self.templates.get_template(config.template_name)
+#             for msg_type, config in self._template_configs.items()
+#         }
     
-    def render_and_format(
-        self, message_type: MessageOutputType, 
-        context: Dict[str, Any]
-    ) -> str:
-        """
-        Renders the template with given context and formats it as an SSE event.
+#     def render_and_format(
+#         self, message_type: MessageOutputType, 
+#         context: Dict[str, Any]
+#     ) -> str:
+#         """
+#         Renders the template with given context and formats it as an SSE event.
         
-        Args:
-            message_type: Type of message to render
-            context: Dictionary of variables to pass to the template
+#         Args:
+#             message_type: Type of message to render
+#             context: Dictionary of variables to pass to the template
             
-        Returns:
-            Formatted SSE event string
-        """
-        template = self._message_templates[message_type]
-        config = self._template_configs[message_type]
+#         Returns:
+#             Formatted SSE event string
+#         """
+#         template = self._message_templates[message_type]
+#         config = self._template_configs[message_type]
         
-        rendered_content = template.render(**context)
-        data = json.dumps({"content": rendered_content})
+#         rendered_content = template.render(**context)
+#         data = json.dumps({"content": rendered_content})
         
-        return f"event: {config.event_name}\ndata: {data}\n\n"
+#         return f"event: {config.event_name}\ndata: {data}\n\n"
     
-    def render_only(
-        self, message_type: MessageOutputType, 
-        context: Dict[str, Any]
-    ) -> str:
-        """
-        Just renders the template without SSE formatting.
+#     def render_only(
+#         self, message_type: MessageOutputType, 
+#         context: Dict[str, Any]
+#     ) -> str:
+#         """
+#         Just renders the template without SSE formatting.
         
-        Args:
-            message_type: Type of message to render
-            context: Dictionary of variables to pass to the template
+#         Args:
+#             message_type: Type of message to render
+#             context: Dictionary of variables to pass to the template
             
-        Returns:
-            Rendered template string
-        """
-        return self._message_templates[message_type].render(**context)
+#         Returns:
+#             Rendered template string
+#         """
+#         return self._message_templates[message_type].render(**context)

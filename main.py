@@ -3,6 +3,7 @@ import logging
 from uuid import uuid4
 import json
 from asyncio.queues import QueueEmpty
+from itertools import chain
 
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -20,8 +21,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from fastapi.responses import (HTMLResponse, 
                                RedirectResponse, 
                                StreamingResponse, 
-                               JSONResponse, 
-                               FileResponse)
+                               JSONResponse)
 from fastapi.templating import Jinja2Templates
 from fastapi.security import HTTPBasic
 from fastapi.middleware.cors import CORSMiddleware
@@ -37,7 +37,7 @@ import src.models as models
 from src.text_utils import MarkdownConverter
 from src.entry import LoggedAttribute, get_entry_type_registry
 from src.registry import GraphManager
-from src.messages import (AsyncMessageStreamHandler, 
+from src.messages import (AsyncMessageStreamHandler,
                           AttachmentData,
                           MessageInput, 
                           AttachmentProcessingError,
@@ -119,8 +119,8 @@ security = HTTPBasic()
 app.add_middleware(
     SessionMiddleware,
     secret_key=os.environ.get("SECRET_KEY", "your-secret-key-here"),
-    session_cookie="chat_session"
-)
+    session_cookie="chat_session")
+
 
 PORT = os.environ.get("SKEERNIR_PORT", "8899")
 app.add_middleware(
@@ -128,8 +128,7 @@ app.add_middleware(
     allow_origins=[f"http://localhost:{PORT}"],
     allow_credentials=True,
     allow_methods=["GET", "POST"],
-    allow_headers=["*"]
-)
+    allow_headers=["*"])
 
 
 class CustomError(Exception):
@@ -139,6 +138,12 @@ class CustomError(Exception):
         # Log the error when the exception is created
         logger.error(self.message)
         super().__init__(self.message)
+
+
+def flatten_list(nested_list):
+    return sum([
+        flatten_list(item) if isinstance(item, list) else [item]
+        for item in nested_list], [])
 
 
 # Dependency to get database session
@@ -182,7 +187,6 @@ def get_conversation_messages(
             .order_by(desc(models.Message.id))
             .all()
     )
-    
     return messages
 
 
@@ -212,7 +216,6 @@ def get_message_attachments(
     db: Session, 
     message: models.Message
     )-> List[models.Attachment]:
-
     message_attachments = (
         db.query(models.Attachment)
         .filter(models.Attachment.message_uuid == message.message_uuid)
@@ -225,7 +228,6 @@ def get_message_graphlogs(
     db: Session, 
     message: models.Message
     )-> List[models.GraphLog]:
-
     message_graphlogs = (
         db.query(models.GraphLog)
         .filter(models.GraphLog.message_uuid == message.message_uuid)
@@ -238,14 +240,12 @@ def get_conversations_with_earliest_messages(
     db: Session, 
     user: models.User
     )-> Dict[str, str]:
-    
     # Step 1: Find all conversations bounded with the given user
     user_conversations = (
         db.query(models.Conversation)
           .filter(models.Conversation.user == user)
           .all()
     )
-        
     result = []
     # Step 2: For each user conversation, find the earliest message
     for conversation in user_conversations:
@@ -261,7 +261,6 @@ def get_conversations_with_earliest_messages(
                 "session_id": conversation.session_uuid,
                 "earliest_message": earliest_message.content,
             })
-    
     return result
 
 
@@ -315,7 +314,6 @@ def create_attachment_record(
                 timezone.utc).isoformat()
         }
     )
-
     return attachment_item
 
 
@@ -333,7 +331,6 @@ def create_graphlog_record(
         item_type = item_type,
         item_content = item_content,
     )
-
     return graphlog_item
 
 
@@ -480,29 +477,28 @@ async def register(
         {
             "error_message": "Passwords do not match",
             "username": username
-
         })
+    
     # Check if username or email already exists
     if db.query(models.User).filter(models.User.username == username).first():
         return templates.TemplateResponse(request, "register.html",
         {
             "error_message": "Username already taken", 
             "username": username
-
         })
     
     if db.query(models.User).filter(models.User.email == email).first():
         return templates.TemplateResponse(request, "register.html",
         {
-            "error_message": "Email already registered", 
+            "error_message": "Email already registered",
             "username": ""
-
         })
+    
     # Create new user
     hashed_password = models.User.hash_password(password)
     user = models.User(
-        username=username, 
-        email=email, 
+        username=username,
+        email=email,
         hashed_password=hashed_password)
     db.add(user)
     db.commit()
@@ -526,7 +522,6 @@ async def delmess(
     uuid: str,
     session_id: str,
     db: Session = Depends(get_db)):
-    
     
     redirect_url = request.url_for("chat", session_id=session_id)
     if not delete_message_with_attachments(db, uuid):
@@ -685,8 +680,7 @@ async def chat(
                             
                 prev_message = USER_TEMPLATE.render(user_message)
                 message_history.append(
-                    HumanMessage(content=user_message.content))
-            
+                    HumanMessage(content=flatten_list(user_message.content)))
             prev_messages_html += prev_message
 
         config = {"configurable": {"thread_id": session_id}}
@@ -696,13 +690,13 @@ async def chat(
         if graph_memory_messages:
             graphai.update_state(config, {"messages":[
                 RemoveMessage(id=m.id) for m in graph_memory_messages]})
-            
-        ########################################################################
-        # TODO For more advance graph flow it might be nessary to save and     #
-        # be able to deserialize not obly messages but at least the last state # 
-        # within the history of outputs (LogAttributes). Should be implemented #
-        # in future relise.                                                    #  
-        ########################################################################
+        
+        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+        # TODO For more advance graph flow it might be nessary to save and      #
+        # be able to deserialize not only messages but at least the last state  # 
+        # within the history of outputs (LogAttributes). Should be implemented  #
+        # in future relises.                                                     #  
+        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
         
         graphai.update_state(config, {"messages": message_history})
 
@@ -736,7 +730,6 @@ async def delconv(
     if not user:
         return RedirectResponse(
             url="/login", status_code=status.HTTP_302_FOUND)
-    
     try:
         conv = get_conversation(db, user, session_id)
         delete_conversation_and_related(db, conv)
@@ -837,7 +830,6 @@ async def send_input_message(
     return JSONResponse({"status": "processing_started"})
 
 
-
 @app.post("/hardstopstream/{session_id}", response_class=JSONResponse)
 async def send_input_message(
     request: Request,
@@ -902,31 +894,27 @@ async def stream_endpoint(
     if not user:
         return RedirectResponse(url="/", status_code=status.HTTP_303_SEE_OTHER)
     conv = get_conversation(db, user, session_id)
-
     session = GM.get_session(session_id)    
     graphai = session.graph.graph_call
-    
     async def stream_generator(session_id):
-        
         """ Direct stream data for a specific session """
         try:
             user_message = await SMH.get_queue(session_id)
             user_message.uuid = str(uuid4())
-            
             db.add(create_message_record(
                 user_message.uuid,
                 user_message.message,
                 conv, 
                 is_bot=False))
-    
             input_message = HumanMessage(content=[
                 {"type": "text", "text": user_message.message}])
-            
             if user_message.attachments:
-                # history of messages
+
+                # Add all attachments in proper format
                 input_message.content.extend(
-                    [attch.formatted_content for attch in 
-                     user_message.attachments])
+                    chain.from_iterable(
+                        attch.formatted_content 
+                        for attch in user_message.attachments))
                 
                 # Create and add attachment records to db
                 db.add_all([
@@ -970,7 +958,6 @@ async def stream_endpoint(
 
                     yield to_post
             
-
             bot_message_item = create_message_record(
                 message_uuid=bot_message_uuid,
                 message=bot_message, 
@@ -1010,7 +997,6 @@ async def stream_endpoint(
 
 
 if __name__ == '__main__':
-    
 
     import uvicorn
     import tracemalloc
@@ -1024,17 +1010,15 @@ if __name__ == '__main__':
             log_level="info",
             access_log=True,
             )
-    
+
     except Exception as e:
         logger.info(f"An error occurred: {e}")
-    
+
     finally:
         # Always perform cleanup
         logger.info("Cleanup completed. Exiting program.")
-        
         snapshot = tracemalloc.take_snapshot()
         top_stats = snapshot.statistics('lineno')
         logger.info("\nMemory traceback:")
         for stat in top_stats[:3]:
             logger.info(stat)
-    

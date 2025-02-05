@@ -13,11 +13,12 @@ from pydantic import Field
 from langchain_core.messages import (
     AIMessageChunk, HumanMessage, AIMessage, BaseMessage)
 from langchain.chat_models.base import BaseChatModel
-from langchain_core.outputs import ChatGenerationChunk
+from langchain_core.outputs import ChatGenerationChunk, ChatResult, ChatGeneration
 from langchain_core.callbacks import CallbackManagerForLLMRun
 from langgraph.graph import MessagesState
 from openai import OpenAI
 from ollama import AsyncClient as AsyncOllamaClient
+from ollama import Client as OllamaClient
 
 from src.registry import GraphManager
 from src.entry import LoggedAttribute
@@ -29,6 +30,12 @@ class LlamacppException(Exception):
 
 class vLLMException(Exception):
   pass
+
+
+def flatten_list(nested_list):
+    return sum([
+        flatten_list(item) if isinstance(item, list) else [item]
+        for item in nested_list], [])
 
 
 def run_server(
@@ -205,8 +212,6 @@ async def run_graph_in_terminal(
         graph_manager.remove_session(session_id, with_graph=True)
 
 
-
-
 # Based on
 # https://python.langchain.com/docs/how_to/custom_chat_model/
 
@@ -362,25 +367,45 @@ class LlamaCppClient(BaseChatModel):
 class OllamaClientWrapper(BaseChatModel):
 
     model_name: str
-    client: AsyncOllamaClient
-    SYSTEM_MESSAGE: ClassVar[str] = (
+    client: AsyncOllamaClient | OllamaClient
+    DEFAULT_SYSTEM_MESSAGE: ClassVar[str] = (
         "A chat between a curious human and an artificial intelligence "
         "assistant.  The assistant gives helpful, detailed, and polite answers "
         "to the human's questions."
     )
     
-    def __init__(self, model_name: str, client: AsyncOllamaClient, **kwargs):
+    def __init__(
+            self, 
+            model_name: str, 
+            client: AsyncOllamaClient | OllamaClient,
+            system_message: Optional[str] = None,
+            **kwargs):
+        
         super().__init__(model_name=model_name, client=client, **kwargs)
+        self._system_message = system_message or self.DEFAULT_SYSTEM_MESSAGE
+
+    @property
+    def system_message(self) -> str:
+        """Get the current system message."""
+        return self._system_message
+
+    @system_message.setter
+    def system_message(self, value: str) -> None:
+        """Set a new system message."""
+        if not isinstance(value, str):
+            raise TypeError("System message must be a string")
+        if not value.strip():
+            raise ValueError("System message cannot be empty")
+        self._system_message = value
 
     def _format_message_state(self, state: MessagesState):
 
         formatted_messages = []
-        if self.SYSTEM_MESSAGE:
-            formatted_messages.append({
-                "role": "system",
-                "content": self.SYSTEM_MESSAGE
-            })
-            
+        formatted_messages.append({
+            "role": "system",
+            "content": self.system_message
+        })
+        
         for message in state:
             
             if isinstance(message, AIMessage):
@@ -394,9 +419,10 @@ class OllamaClientWrapper(BaseChatModel):
                 message_dict = {"role": role}
                 if isinstance(message.content, list):
                     images = []
+                    texts = []
                     for part in message.content:
                         if part["type"] == "text":
-                            message_dict["content"] = part["text"]
+                            texts.append(part["text"])
                             continue
 
                         if part["type"] == "image_url":
@@ -405,6 +431,8 @@ class OllamaClientWrapper(BaseChatModel):
                             continue
                     if images:
                         message_dict["images"] = images
+                    if texts:
+                        message_dict["content"] = "\n\n".join(texts)
                 else:
                     message_dict["content"] = message.content
 
@@ -415,14 +443,41 @@ class OllamaClientWrapper(BaseChatModel):
 
         return formatted_messages
     
-    def _generate(self, messages, stop = None, run_manager = None, **kwargs):
-        return super()._generate(messages, stop, run_manager, **kwargs)
+    def _generate(self,
+        messages: List[BaseMessage],
+        stop: Optional[List[str]] = None,
+        run_manager: Optional[CallbackManagerForLLMRun] = None,
+        tools: Optional[Any] = None,
+        **kwargs: Any,
+    )-> ChatResult:
+        
+        formatted_state = self._format_message_state(messages)
+        result = self.client.chat(
+            model=self.model_name, 
+            messages=formatted_state, 
+            stream=False,
+            tools=tools,
+            options=kwargs)
+
+        # additional statistics could be set        
+        generation = ChatGeneration(
+            message=AIMessage(
+                content=result['message']['content'], 
+                response_metadata={
+                    "eval_count": result["eval_count"],
+                    "prompt_eval_count": result["prompt_eval_count"]
+                }
+            )
+        )
+        
+        return ChatResult(generations=[generation])
 
     async def _astream(
         self,
         messages: List[BaseMessage],
         stop: Optional[List[str]] = None,
         run_manager: Optional[CallbackManagerForLLMRun] = None,
+        tools: Optional[Any] = None,
         **kwargs: Any,
     ) -> AsyncIterator[ChatGenerationChunk]:
         
@@ -432,6 +487,7 @@ class OllamaClientWrapper(BaseChatModel):
             model=self.model_name, 
             messages=formatted_state, 
             stream=True,
+            tools=tools,
             options=kwargs):
 
             if part['message']['content']:
@@ -571,3 +627,42 @@ class OpenAICompatibleChatModel(BaseChatModel):
         return {"model_name": self.model_name}
     
 
+class PlaceholderModel(BaseChatModel):
+    
+    model_name: str = Field(default="ghost")
+
+    """A placeholder model that always returns a predefined AI message."""
+    
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def _generate(self, messages, stop = None, run_manager = None, **kwargs):
+        return super()._generate(messages, stop, run_manager, **kwargs)
+
+    def _stream(
+        self,
+        messages: List[BaseMessage],
+        stop: Optional[List[str]] = None,
+        run_manager: Optional[CallbackManagerForLLMRun] = None,
+        response_text: str = "",
+        **kwargs: Any,
+    ) -> Iterator[ChatGenerationChunk]:
+        
+        for word in response_text.split(" "):
+
+            if word:
+                chunk = ChatGenerationChunk(
+                    message=AIMessageChunk(content=word + " "))
+                
+                yield chunk
+
+    @property
+    def _llm_type(self) -> str:
+        """Get the type of language model used by this chat model."""
+        return "ghost_placeholder"
+
+    @property
+    def _identifying_params(self) -> Dict[str, Any]:
+        """Return a dictionary of identifying parameters."""
+        return {"model_name": self.model_name}
+    

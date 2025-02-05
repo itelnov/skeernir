@@ -20,55 +20,9 @@ if p not in sys.path:
     sys.path.append(p)
 
 from src.registry import tool_graph
+from utils import PlaceholderModel
 
 
-class PlaceholderModel(BaseChatModel):
-    
-    model_name: str = Field(default="ghost")
-    response_text: str
-
-    """A placeholder model that always returns a predefined AI message."""
-    
-    def __init__(self, response_text: str = "This is a placeholder response.", 
-                 **kwargs):
-        """
-        Initialize the placeholder model.
-        
-        Args:
-            response_text (str): The text to return in the AI message.
-                               Defaults to "This is a placeholder response."
-        """
-        super().__init__(response_text=response_text, **kwargs)
-
-    def _generate(self, messages, stop = None, run_manager = None, **kwargs):
-        return super()._generate(messages, stop, run_manager, **kwargs)
-
-    def _stream(
-        self,
-        messages: List[BaseMessage],
-        stop: Optional[List[str]] = None,
-        run_manager: Optional[CallbackManagerForLLMRun] = None,
-        **kwargs: Any,
-    ) -> Iterator[ChatGenerationChunk]:
-        
-        for word in self.response_text.split(" "):
-
-            if word:
-                chunk = ChatGenerationChunk(
-                    message=AIMessageChunk(content=word + " "))
-                
-                yield chunk
-
-    @property
-    def _llm_type(self) -> str:
-        """Get the type of language model used by this chat model."""
-        return "ghost_placeholder"
-
-    @property
-    def _identifying_params(self) -> Dict[str, Any]:
-        """Return a dictionary of identifying parameters."""
-        return {"model_name": self.model_name}
-    
 
 @tool_graph(name='Ghost', tag="welcom")
 def get_ghost(**kwargs):
@@ -77,14 +31,13 @@ def get_ghost(**kwargs):
     kwargs.pop("port", None)
     sampling_data = kwargs.pop("sampling", {})
 
-    model = PlaceholderModel(
-        model_name="Ghost",
-        response_text=("Oh, welcome to Skeernir! Pick your Agent, sit back, and "
-                       "have a blast... or don't. Or maybe you'll just love "
-                       "hating every second of it. Either way, we promise "
-                       "something.")
-    )
-    
+    response_text=("Oh, welcome to Skeernir! Pick your Agent, sit back, and "
+                    "have a blast... or don't. Or maybe you'll just love "
+                    "hating every second of it. Either way, we promise "
+                    "something.")
+
+    model = PlaceholderModel(model_name="Ghost")
+    sampling_data["response_text"] = response_text
     # Define the function that calls the model
     async def call_model(state: MessagesState):
         response = await model.ainvoke(state["messages"], **sampling_data)

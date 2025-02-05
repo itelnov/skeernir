@@ -1,0 +1,15 @@
+{
+    "server": "ollama",
+    "model_name": "deepseek-r1:14b",
+    "tool_model_name": "smollm2:1.7b",
+    "tools_sampling_data": {
+        "temperature": 0.0,
+        "num_predict": 1024,
+        "num_ctx": 256
+    },
+    "sampling": {
+        "temperature": 0.1,
+        "num_ctx": 8192,
+        "num_predict": -1
+    }
+}

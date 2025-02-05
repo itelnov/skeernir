@@ -32,8 +32,10 @@ from sqlalchemy.sql import text
 from sqlalchemy.exc import SQLAlchemyError
 from dotenv import load_dotenv 
 from langchain_core.messages import RemoveMessage
+from langgraph.types import Command
 
 import src.models as models
+from src.graphs.utils import flatten_list
 from src.text_utils import MarkdownConverter
 from src.entry import LoggedAttribute, get_entry_type_registry
 from src.registry import GraphManager
@@ -138,12 +140,6 @@ class CustomError(Exception):
         # Log the error when the exception is created
         logger.error(self.message)
         super().__init__(self.message)
-
-
-def flatten_list(nested_list):
-    return sum([
-        flatten_list(item) if isinstance(item, list) else [item]
-        for item in nested_list], [])
 
 
 # Dependency to get database session
@@ -586,7 +582,8 @@ async def loadmodel(
         await SMH.delete_queue(session_id)
         GM.connect_session(session_id, GM.default_graph)
         wm = f"{e}" + "\nSee details in app logs, switch to the default graph"
-        redirect_url = redirect_url.include_query_params(warning_message=f"{wm}")
+        redirect_url = redirect_url.include_query_params(
+            warning_message=f"{wm}")
         logger.error(e)
     finally:
         response = RedirectResponse(
@@ -936,9 +933,18 @@ async def stream_endpoint(
 
             config = {"configurable": {"thread_id": session_id}}
             bot_message = ''
+            
+            next_node = graphai.get_state(config).next
+            if len(next_node):
+                logger.info((
+                    f"Graph {session.graph.name} on node {next_node}: "
+                    "user input required"))
+                stream_in = Command(resume=input_message)
+            else:
+                stream_in = {"messages": [input_message]}
 
             async for chunk_type, stream_data in graphai.astream(
-                {"messages": [input_message]}, 
+                stream_in,
                 config=config,
                 stream_mode=["messages", "values"]):
                 

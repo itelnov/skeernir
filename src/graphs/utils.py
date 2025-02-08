@@ -85,7 +85,13 @@ def run_server(
             pass
     
     elif server == "ollama":
+        my_env = os.environ.copy()
+        my_env["OLLAMA_HOST"] = f"0.0.0.0:{port}"
         cmd = ["ollama",  "serve"]
+        
+        if not use_gpu:
+            my_env['CUDA_VISIBLE_DEVICES'] = ''
+        
         # Start the subprocess
         process = subprocess.Popen(
             cmd,
@@ -93,6 +99,7 @@ def run_server(
             stderr=subprocess.PIPE,
             text=True,
             bufsize=1,
+            env=my_env
             )
         logging.info(f"Started process with PID: {process.pid}")
         return process

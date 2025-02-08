@@ -140,13 +140,11 @@ def get_deckgen(
         sampling_data = kwargs.get("sampling")
         tools_sampling_data = kwargs.get("tools_sampling_data")
         
-        os.environ["OLLAMA_HOST"] = f"0.0.0.0:{port}"
         graph_server_process = None
-
         graph_server_process = run_server(
             server,
             model_name,
-            port=port, 
+            port=port,
             use_gpu=True, 
             **kwargs)
 
@@ -179,6 +177,15 @@ def get_deckgen(
             if stderr_line:
                 logging.info(f"STDERR: {stderr_line.strip()}")
 
+
+        port2 = port + 77
+        graph_server_process = run_server(
+            server,
+            model_name,
+            port=port2,
+            use_gpu=False, 
+            **kwargs)
+
         pull_process_b = subprocess.Popen(
             ["ollama", "pull", tool_model_name],
             stdout=subprocess.PIPE,
@@ -207,13 +214,13 @@ def get_deckgen(
             headers={'x-some-header': 'some-value'}
             )
         )
-        
         ds_drafter.system_message = DRAFTER_SYSTEM_MESSAGE
         
+
         tool_caller = OllamaClientWrapper(
             model_name=tool_model_name,
             client=OllamaClient(
-                host=f'http://0.0.0.0:{port}',
+                host=f'http://0.0.0.0:{port2}',
                 headers={'x-some-header': 'some-value'}
             )
         )
@@ -224,7 +231,7 @@ def get_deckgen(
             
             user_content = state["messages"]
             if state.get("last_node", "") == VERIFY_DRAFTER:
-                user_content = flatten_list([ #user_content, 
+                user_content = flatten_list([
                     state["deck_draft"], state["feedback"]])
 
             generated = await ds_drafter.ainvoke(user_content, **sampling_data)

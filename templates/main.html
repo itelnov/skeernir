@@ -112,7 +112,16 @@
                             hx-swap="none">
                             <div class="relative">
                                 <div class="pb-10 bg-gray-700 overflow-hidden rounded-t-xl rounded-b-3xl border-gray-400">
-                                    <textarea id="user_input" name="message" value="" placeholder="Type your message..." rows="1" class="rounded-lg min-h-12 max-h-40 p-3 w-full focus:outline-none resize-y" onkeydown="handleKeyDown(event)" required autofocus></textarea>
+                                    <textarea 
+                                        id="user_input" 
+                                        name="message" value="" 
+                                        placeholder="Type your message..." 
+                                        rows="1" 
+                                        class="rounded-lg min-h-12 max-h-40 p-3 w-full focus:outline-none resize-y" 
+                                        onkeydown="handleKeyDown(event)" 
+                                        oninput="this.style.height = 'auto'; this.style.height = this.scrollHeight + 'px'" 
+                                        required 
+                                        autofocus></textarea>
                                 </div>
                                 <div class="absolute bottom-0 right-0">
                                     <button

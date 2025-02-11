@@ -16,6 +16,7 @@ chat.db
 
 # vscode
 .vscode/
+.outputs/
 
 # Distribution / packaging
 .Python

@@ -38,19 +38,17 @@
     <div class="flex flex-col">
         <div class="flex justify-end m-1 w-full">
             <div class="user-message">
-                <div class="bg-indigo-800 rounded-lg py-2 px-3 text-white shadow-2xl">
+                <div class="flex flex-col bg-indigo-800 rounded-lg py-2 px-3 text-white shadow-2xl">
                     {{ message | markdown_to_html | safe }}
-                    <div class="flex flex-row justify-end">
+                    <div class="h-4 flex flex-row justify-end relative">
                         <div></div>
                         <button
                             hx-get="/remove_message/{{uuid}}"
                             hx-trigger="click"
                             hx-target="#main_chat"
                             hx-swap="outerHTML"
-                            hx-vals='js:{
-                                session_id: document.getElementById("main_chat").dataset.sessionId
-                                        }'                            
-                            class="mess-del-button bg-indigo-800 p-1 text-sm text-gray-300">
+                            hx-vals='js:{session_id: document.getElementById("main_chat").dataset.sessionId}'                            
+                            class="mess-del-button bg-indigo-800 text-sm text-gray-300">
                             delete
                         </button>
                     </div>

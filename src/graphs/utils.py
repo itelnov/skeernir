@@ -618,7 +618,6 @@ class OpenAICompatibleChatModel(BaseChatModel):
                 
                 yield chunk
 
-        # Let's add some other information (e.g., response metadata)
         chunk = ChatGenerationChunk(
             message=AIMessageChunk(content="", response_metadata={}))
         yield chunk

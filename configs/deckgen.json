@@ -2,6 +2,7 @@
     "server": "ollama",
     "model_name": "deepseek-r1:14b",
     "tool_model_name": "smollm2:1.7b",
+    "output_folder": ".outputs",
     "tools_sampling_data": {
         "temperature": 0.0,
         "num_predict": 1024,

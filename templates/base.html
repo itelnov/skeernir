@@ -112,7 +112,8 @@
                         // Event listener to detect user scrolling
                         this.container.addEventListener('scroll', () => {
                             // Check if the user scrolled up (not at the bottom)
-                            this.isUserScrolling = this.container.scrollHeight - this.container.scrollTop > this.container.clientHeight + 5;
+                            this.isUserScrolling = (
+                                this.container.scrollHeight - this.container.scrollTop > this.container.clientHeight + 5);
                         });
                     }
 
@@ -139,7 +140,6 @@
                     }
 
                     getCodeHeader(lang_display) {
-                        // TODO Use template code_block.html for this
                         // Create main div
                         const mainDiv = document.createElement('div');
                         mainDiv.className = 'flex justify-between' + 
@@ -176,9 +176,6 @@
 
                         this.currentMessage = temp.firstElementChild;
                         this.container.appendChild(this.currentMessage);
-                        
-                        // this.currentElement = this.currentMessage.querySelector(
-                        //     'div:not(:has(div))');
                         this.currentElement = this.currentMessage.querySelector('.chunks');
                         this.currentParent = this.currentElement
 
@@ -188,7 +185,7 @@
                             codeLanguage: null,
                             accumulatedContent: ''
                         };
-
+                        this.container.scrollTop = this.container.scrollHeight;
                         return this.currentMessage;
                     }
 
@@ -197,6 +194,7 @@
                         temp.innerHTML = template['content'];
                         this.currentMessage = temp.firstElementChild;
                         this.container.appendChild(this.currentMessage);
+                        this.container.scrollTop = this.container.scrollHeight;
                     }
 
                     addAgentLog(logMessage) {
@@ -230,32 +228,32 @@
                         return new_chunk.split("|");
                     }
 
-                    extractMathPatterns(text, pattern = /\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\)/g) {
-                        const matches = {};
-                        let counter = 0;
+                    // extractMathPatterns(text, pattern = /\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\)/g) {
+                    //     const matches = {};
+                    //     let counter = 0;
                         
-                        const processedText = text.replace(pattern, (match) => {
-                            const placeholder = `MATH_PLACEHOLDER_${counter++}N`;
-                            matches.push(match);
-                            return placeholder;
-                        });
+                    //     const processedText = text.replace(pattern, (match) => {
+                    //         const placeholder = `MATH_PLACEHOLDER_${counter++}N`;
+                    //         matches.push(match);
+                    //         return placeholder;
+                    //     });
 
-                        return {
-                            processedText,
-                            matches
-                        };
-                    }
+                    //     return {
+                    //         processedText,
+                    //         matches
+                    //     };
+                    // }
 
-                    restoreMathPatterns(text, mapping) {
-                        let result = text;
-                        if (mapping) {
-                            for (const [placeholder, chunk] of Object.entries(mapping)) {
-                                result = result.split(placeholder).join(
-                                    `${chunk}`);
-                            }
-                        }
-                        return result;
-                    }                 
+                    // restoreMathPatterns(text, mapping) {
+                    //     let result = text;
+                    //     if (mapping) {
+                    //         for (const [placeholder, chunk] of Object.entries(mapping)) {
+                    //             result = result.split(placeholder).join(
+                    //                 `${chunk}`);
+                    //         }
+                    //     }
+                    //     return result;
+                    // }                 
                     
                     addChunk(chunk) {
                         this.splitTripleBackticks(chunk).forEach(
@@ -349,12 +347,14 @@
                                 if (matches.length > 0) {
                                     
                                     await typesetAndContinue(
-                                        document.getElementById('chat-messages').lastElementChild
+                                        document.getElementById(
+                                            'chat-messages').lastElementChild
                                     );
                                     const mjx_containers = this.currentElement.getElementsByTagName(
                                         'mjx-container')
 
-                                    this.placeholder_buffer = Array.from(mjx_containers);
+                                    this.placeholder_buffer = Array.from(
+                                        mjx_containers);
                                     }
                                 }
                             return;
@@ -364,10 +364,7 @@
                             // Check for code block end or continue
                             const content = this.streamState.accumulatedContent.trim()
                             const endoftheblockA = content.match(/```(?:\s+|$)/);
-                            // const endoftheblockB = content.match(/^```/m);
-                            // && endoftheblockB
                             if (endoftheblockA != null) {
-                            //if (endoftheblockA && endoftheblockB)  {
                                 // clean last update of the block
                                 let blockcontent = this.splitTripleBackticks(
                                     this.streamState.accumulatedContent.trim())
@@ -642,6 +639,8 @@
             if (event.key === 'Enter' && !event.shiftKey) {
                 event.preventDefault();
                 document.getElementById('SubmitButton').click();
+                // const container = document.getElementById('chat-messages')
+                // container.scrollTop = container.scrollHeight;
             }
         }
 

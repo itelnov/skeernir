@@ -2,9 +2,9 @@
     <div class="flex flex-col">
         <div class="flex justify-start m-1">
             <div class="bot-message">
-                <div class="rounded-lg py-2 px-3 shadow-2xl">
+                <div class="flex flex-col rounded-lg py-2 px-3 shadow-2xl">
                     {{ bot_message | markdown_to_html | safe }}
-                    <div class="flex flex-row justify-end">
+                    <div class="h-4 flex flex-row justify-end">
                         <div></div>
                         <button
                             hx-get="/remove_message/{{uuid}}"
@@ -12,7 +12,7 @@
                             hx-target="#main_chat"
                             hx-swap="outerHTML"
                             hx-vals='js:{session_id: document.getElementById("main_chat").dataset.sessionId}'
-                            class="mess-del-button p-1 text-sm text-gray-500">
+                            class="mess-del-button text-sm text-gray-500">
                             delete
                         </button>
                     </div>

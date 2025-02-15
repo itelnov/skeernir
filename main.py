@@ -1,4 +1,5 @@
 import os
+import asyncio
 import logging
 from uuid import uuid4
 import json
@@ -7,7 +8,7 @@ from itertools import chain
 
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
-from typing import Optional, List, Dict, Union, Tuple, Literal, Generator
+from typing import Optional, List, Dict, AsyncGenerator
 from fastapi.staticfiles import StaticFiles
 from fastapi import (
     FastAPI,
@@ -26,10 +27,15 @@ from fastapi.templating import Jinja2Templates
 from fastapi.security import HTTPBasic
 from fastapi.middleware.cors import CORSMiddleware
 from langchain_core.messages import AIMessageChunk, HumanMessage, AIMessage
-from sqlalchemy import create_engine, desc
+from sqlalchemy import create_engine, desc, select, delete
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.sql import text
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import (
+    create_async_engine,
+    AsyncSession,
+    async_sessionmaker
+)
 from dotenv import load_dotenv 
 from langchain_core.messages import RemoveMessage
 from langgraph.types import Command
@@ -59,14 +65,43 @@ ENTRY_TYPE_REGISTRY = get_entry_type_registry()
 
 # Database setup
 SQLALCHEMY_DATABASE_URL = os.environ.get(
-    "SQLALCHEMY_DATABASE_URL", "sqlite:///./chat.db")
-engine = create_engine(SQLALCHEMY_DATABASE_URL)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-# Execute the VACUUM command
-db = SessionLocal()
-db.execute(text('VACUUM'))
-db.commit()
-models.Base.metadata.create_all(bind=engine)
+    "SQLALCHEMY_DATABASE_URL", "sqlite+aiosqlite:///./chat.db")
+async_engine = create_async_engine(
+    SQLALCHEMY_DATABASE_URL,
+    echo=False,
+    pool_pre_ping=True
+)
+
+AsyncSessionLocal = async_sessionmaker(
+    async_engine,
+    class_=AsyncSession,
+    expire_on_commit=False,
+    autocommit=False,
+    autoflush=False
+)
+
+# models.Base.metadata.create_all(bind=async_engine)
+
+# Example of executing VACUUM command properly
+async def vacuum_database():
+    async with AsyncSessionLocal() as session:
+        try:
+            await session.execute(text('VACUUM'))
+            await session.commit()
+        except Exception as e:
+            await session.rollback()
+            raise e
+        finally:
+            await session.close()
+
+# Get the sync engine to create tables
+async def init_models():
+    async with async_engine.begin() as conn:
+        await conn.run_sync(models.Base.metadata.create_all)
+
+
+asyncio.run(vacuum_database())
+asyncio.run(init_models())
 
 
 templates = Jinja2Templates(directory="templates")
@@ -104,12 +139,12 @@ def send_chunk_template(uuid="") -> str:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup
-    logger.info("Starting up application...")
-    yield
-    # Shutdown
-    logger.info("Shutting down application...")
-    GM.terminate_all()
+    try:
+        logger.info("Starting up application...")
+        yield
+    finally:
+        logger.info("Shutting down application...")
+        await GM.terminate_all()  # Make this async if possible
 
 
 app = FastAPI(lifespan=lifespan)
@@ -133,148 +168,345 @@ app.add_middleware(
     allow_headers=["*"])
 
 
-class CustomError(Exception):
-    """Custom exception class for handling specific errors"""
-    def __init__(self, message):
-        self.message = message
-        # Log the error when the exception is created
-        logger.error(self.message)
-        super().__init__(self.message)
-
-
 # Dependency to get database session
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+async def get_db() -> AsyncGenerator[AsyncSession, None]:
+    async with AsyncSessionLocal() as session:
+        try:
+            yield session
+        finally:
+            await session.close()
 
 
-def get_current_user(
-        request: Request, 
-        db: Session = Depends(get_db)
-    ) -> Optional[models.User]:
+# def get_current_user(
+#         request: Request, 
+#         db: Session = Depends(get_db)
+#     ) -> Optional[models.User]:
+#     user_id = request.session.get("user_id")
+#     if user_id:
+#         return db.query(models.User).filter(models.User.id == user_id).first()
+#     return None
+
+
+async def get_current_user(
+    request: Request,
+    db: AsyncSession = Depends(get_db)
+) -> Optional[models.User]:
     user_id = request.session.get("user_id")
     if user_id:
-        return db.query(models.User).filter(models.User.id == user_id).first()
+        stmt = select(models.User).where(models.User.id == user_id)
+        result = await db.execute(stmt)
+        return result.scalar_one_or_none()
     return None
 
 
-def get_conversation_messages(
-        db: Session, 
-        session_id: str) -> List[models.Message]:
-    """
-    Retrieve all messages for a specific conversation, sorted by timestamp in 
-    descending order.
+# def get_conversation_messages(
+#         db: Session, 
+#         session_id: str) -> List[models.Message]:
+#     """
+#     Retrieve all messages for a specific conversation, sorted by timestamp in 
+#     descending order.
     
-    Args:
-        db (Session): SQLAlchemy database session
-        session_id (str): ID of the conversation to fetch messages for
+#     Args:
+#         db (Session): SQLAlchemy database session
+#         session_id (str): ID of the conversation to fetch messages for
         
-    Returns:
-        List[models.Message]: List of messages sorted by timestamp 
-        (newest first)
-    """
+#     Returns:
+#         List[models.Message]: List of messages sorted by timestamp 
+#         (newest first)
+#     """
     
-    messages = (
-        db.query(models.Message)
-            .filter(models.Message.session_uuid == session_id)
-            .order_by(desc(models.Message.id))
-            .all()
+#     messages = (
+#         db.query(models.Message)
+#             .filter(models.Message.session_uuid == session_id)
+#             .order_by(desc(models.Message.id))
+#             .all()
+#     )
+#     return messages
+
+
+# Message operations
+async def get_conversation_messages(
+    db: AsyncSession,
+    session_id: str
+) -> List[models.Message]:
+    """
+    Retrieve all messages for a specific conversation, sorted by timestamp.
+    """
+    stmt = (
+        select(models.Message)
+        .where(models.Message.session_uuid == session_id)
+        .order_by(desc(models.Message.id))
     )
-    return messages
+    result = await db.execute(stmt)
+    return result.scalars().all()
 
 
-def get_conversation(
-    db: Session,
+# def get_conversation(
+#     db: Session,
+#     user: models.User,
+#     session_id: str,
+# ):
+#     conv = db.query(models.Conversation)\
+#     .filter(models.Conversation.session_uuid == session_id)\
+#     .first()
+#     if not conv:
+#         _conv = models.Conversation(
+#             session_uuid = session_id,
+#             user_id = user.id,
+#             title = "new conversation ..."
+#         )
+#         db.add(_conv)
+#         db.commit()
+#         conv = db.query(models.Conversation)\
+#             .filter(models.Conversation.session_uuid == session_id)\
+#             .first()
+#     return conv
+
+
+async def get_conversation(
+    db: AsyncSession,
     user: models.User,
     session_id: str,
-):
-    conv = db.query(models.Conversation)\
-    .filter(models.Conversation.session_uuid == session_id)\
-    .first()
+) -> models.Conversation:
+    stmt = (
+        select(models.Conversation)
+        .where(models.Conversation.session_uuid == session_id)
+    )
+    result = await db.execute(stmt)
+    conv = result.scalar_one_or_none()
+
     if not conv:
-        _conv = models.Conversation(
-            session_uuid = session_id,
-            user_id = user.id,
-            title = "new conversation ..."
+        conv = models.Conversation(
+            session_uuid=session_id,
+            user_id=user.id,
+            title="new conversation ..."
         )
-        db.add(_conv)
-        db.commit()
-        conv = db.query(models.Conversation)\
-            .filter(models.Conversation.session_uuid == session_id)\
-            .first()
+        db.add(conv)
+        await db.commit()
+        await db.refresh(conv)
+
     return conv
 
 
-def get_message_attachments(    
-    db: Session, 
+# def get_message_attachments(    
+#     db: Session, 
+#     message: models.Message
+#     )-> List[models.Attachment]:
+#     message_attachments = (
+#         db.query(models.Attachment)
+#         .filter(models.Attachment.message_uuid == message.message_uuid)
+#         .all()
+#     )
+#     return message_attachments
+
+
+async def get_message_attachments(
+    db: AsyncSession,
     message: models.Message
-    )-> List[models.Attachment]:
-    message_attachments = (
-        db.query(models.Attachment)
-        .filter(models.Attachment.message_uuid == message.message_uuid)
-        .all()
+) -> List[models.Attachment]:
+    stmt = (
+        select(models.Attachment)
+        .where(models.Attachment.message_uuid == message.message_uuid)
     )
-    return message_attachments
+    result = await db.execute(stmt)
+    return result.scalars().all()
 
 
-def get_message_graphlogs(    
-    db: Session, 
+
+# def get_message_graphlogs(    
+#     db: Session, 
+#     message: models.Message
+#     )-> List[models.GraphLog]:
+#     message_graphlogs = (
+#         db.query(models.GraphLog)
+#         .filter(models.GraphLog.message_uuid == message.message_uuid)
+#         .all()
+#     )
+#     return message_graphlogs
+
+
+async def get_message_graphlogs(
+    db: AsyncSession,
     message: models.Message
-    )-> List[models.GraphLog]:
-    message_graphlogs = (
-        db.query(models.GraphLog)
-        .filter(models.GraphLog.message_uuid == message.message_uuid)
-        .all()
+) -> List[models.GraphLog]:
+    stmt = (
+        select(models.GraphLog)
+        .where(models.GraphLog.message_uuid == message.message_uuid)
     )
-    return message_graphlogs
+    result = await db.execute(stmt)
+    return result.scalars().all()
 
 
-def get_conversations_with_earliest_messages(
-    db: Session, 
+# def get_conversations_with_earliest_messages(
+#     db: Session, 
+#     user: models.User
+#     )-> Dict[str, str]:
+#     # Step 1: Find all conversations bounded with the given user
+#     user_conversations = (
+#         db.query(models.Conversation)
+#           .filter(models.Conversation.user == user)
+#           .all()
+#     )
+#     result = []
+#     # Step 2: For each user conversation, find the earliest message
+#     for conversation in user_conversations:
+#         earliest_message = (
+#             db.query(models.Message)
+#               .filter(models.Message.session_uuid == conversation.session_uuid)
+#               .order_by(models.Message.timestamp)
+#               .first()
+#         )
+#         # Step 3: Add the session ID and earliest message to the result
+#         if earliest_message:
+#             result.append({
+#                 "session_id": conversation.session_uuid,
+#                 "earliest_message": earliest_message.content,
+#             })
+#     return result
+
+
+async def get_conversations_with_earliest_messages(
+    db: AsyncSession,
     user: models.User
-    )-> Dict[str, str]:
-    # Step 1: Find all conversations bounded with the given user
-    user_conversations = (
-        db.query(models.Conversation)
-          .filter(models.Conversation.user == user)
-          .all()
+) -> List[Dict[str, str]]:
+    # Find all conversations for the user
+    stmt = (
+        select(models.Conversation)
+        .where(models.Conversation.user == user)
     )
+    result = await db.execute(stmt)
+    user_conversations = result.scalars().all()
+
     result = []
-    # Step 2: For each user conversation, find the earliest message
     for conversation in user_conversations:
-        earliest_message = (
-            db.query(models.Message)
-              .filter(models.Message.session_uuid == conversation.session_uuid)
-              .order_by(models.Message.timestamp)
-              .first()
+        # Find earliest message for each conversation
+        stmt = (
+            select(models.Message)
+            .where(models.Message.session_uuid == conversation.session_uuid)
+            .order_by(models.Message.timestamp)
+            .limit(1)
         )
-        # Step 3: Add the session ID and earliest message to the result
+        msg_result = await db.execute(stmt)
+        earliest_message = msg_result.scalar_one_or_none()
+
         if earliest_message:
             result.append({
                 "session_id": conversation.session_uuid,
                 "earliest_message": earliest_message.content,
             })
+
     return result
 
 
-def delete_conversation_and_related(db: Session, conv: models.Conversation):
+# def delete_conversation_and_related(
+#     db: Session, 
+#     conv: models.Conversation
+# ):
 
+#     # Delete related messages
+#     db.query(models.Message)\
+#         .filter(models.Message.session_uuid == conv.session_uuid)\
+#         .delete(synchronize_session=False)
+
+#     # Delete related attachments
+#     db.query(models.Attachment)\
+#         .filter(models.Attachment.session_uuid == conv.session_uuid)\
+#         .delete(synchronize_session=False)
+
+#     # Finally, delete the conversation itself
+#     db.delete(conv)
+#     db.commit()
+
+
+async def delete_conversation_and_related(
+    db: AsyncSession,
+    conv: models.Conversation
+):
     # Delete related messages
-    db.query(models.Message)\
-        .filter(models.Message.session_uuid == conv.session_uuid)\
-        .delete(synchronize_session=False)
+    messages_stmt = delete(models.Message).where(
+        models.Message.session_uuid == conv.session_uuid
+    )
+    await db.execute(messages_stmt)
 
     # Delete related attachments
-    db.query(models.Attachment)\
-        .filter(models.Attachment.session_uuid == conv.session_uuid)\
-        .delete(synchronize_session=False)
+    attachments_stmt = delete(models.Attachment).where(
+        models.Attachment.session_uuid == conv.session_uuid
+    )
+    await db.execute(attachments_stmt)
 
-    # Finally, delete the conversation itself
-    db.delete(conv)
-    db.commit()
+    # Delete the conversation itself
+    await db.delete(conv)
+    await db.commit()
+
+
+# def delete_message_with_attachments(db: Session, message_uuid: str) -> bool:
+#     """
+#     Delete a message and all its attachments from the database.
+
+#     Args:
+#         db: SQLAlchemy database session
+#         message_uuid: UUID of the message to delete
+
+#     Returns:
+#         bool: True if deletion was successful, False otherwise
+
+#     Raises:
+#         SQLAlchemyError: If there's a database error during deletion
+#     """
+#     try:
+#         # Start a transaction
+#         with db.begin():
+#             # Get the message
+#             message = db.query(models.Message).filter(
+#                 models.Message.message_uuid == message_uuid
+#             ).first()
+
+#             if not message:
+#                 return False
+
+#             # Due to cascade="all, delete-orphan" in the Message model,
+#             # deleting the message will automatically delete all associated 
+#             # attachments
+#             db.delete(message)
+
+#             # Commit the transaction
+#             db.commit()
+
+#         return True
+
+#     except SQLAlchemyError as e:
+#         # Roll back the transaction in case of error
+#         db.rollback()
+#         # You might want to log the error here
+#         logger.info(f"Error deleting message: {str(e)}")
+#         return False
+
+
+async def delete_message_with_attachments(
+    db: AsyncSession,
+    message_uuid: str
+) -> bool:
+    """
+    Delete a message and all its attachments from the database.
+    """
+    try:
+        stmt = select(models.Message).where(
+            models.Message.message_uuid == message_uuid
+        )
+        result = await db.execute(stmt)
+        message = result.scalar_one_or_none()
+
+        if not message:
+            return False
+
+        await db.delete(message)
+        await db.commit()
+        return True
+
+    except SQLAlchemyError as e:
+        await db.rollback()
+        logger.error(f"Error deleting message: {str(e)}")
+        return False
 
 
 def create_message_record(
@@ -330,55 +562,12 @@ def create_graphlog_record(
     return graphlog_item
 
 
-def delete_message_with_attachments(db: Session, message_uuid: str) -> bool:
-    """
-    Delete a message and all its attachments from the database.
-
-    Args:
-        db: SQLAlchemy database session
-        message_uuid: UUID of the message to delete
-
-    Returns:
-        bool: True if deletion was successful, False otherwise
-
-    Raises:
-        SQLAlchemyError: If there's a database error during deletion
-    """
-    try:
-        # Start a transaction
-        with db.begin():
-            # Get the message
-            message = db.query(models.Message).filter(
-                models.Message.message_uuid == message_uuid
-            ).first()
-
-            if not message:
-                return False
-
-            # Due to cascade="all, delete-orphan" in the Message model,
-            # deleting the message will automatically delete all associated 
-            # attachments
-            db.delete(message)
-
-            # Commit the transaction
-            db.commit()
-
-        return True
-
-    except SQLAlchemyError as e:
-        # Roll back the transaction in case of error
-        db.rollback()
-        # You might want to log the error here
-        logger.info(f"Error deleting message: {str(e)}")
-        return False
-
-
 @app.get("/", response_class=RedirectResponse)
 async def root(
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    user = get_current_user(request, db)
+    user = await get_current_user(request, db)
     if user:
         session_id = str(uuid4())
         try:
@@ -404,9 +593,9 @@ async def get_login_form(
     request: Request,
     error_message: str | None = None,
     success_message: str | None = None,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    user = get_current_user(request, db)
+    user = await get_current_user(request, db)
     if not user or error_message:
         return templates.TemplateResponse(request, "login.html", 
             {
@@ -424,11 +613,9 @@ async def login(
     request: Request,
     username: str = Form(...),
     password: str = Form(...),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
-    user = db.query(models.User)\
-        .filter(models.User.username == username)\
-        .first()
+    user = await get_current_user(request, db)
     
     if not user or not models.User.verify_password(
         password, user.hashed_password):
@@ -465,7 +652,7 @@ async def register(
     email: str = Form(...),
     password: str = Form(...),
     confirm_password: str = Form(...),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     # Validate passwords match
     if password != confirm_password:
@@ -476,14 +663,18 @@ async def register(
         })
     
     # Check if username or email already exists
-    if db.query(models.User).filter(models.User.username == username).first():
+    username_stmt = select(models.User).where(models.User.username == username)
+    existing_username = await db.execute(username_stmt)
+    if existing_username.scalar_one_or_none():
         return templates.TemplateResponse(request, "register.html",
         {
             "error_message": "Username already taken", 
             "username": username
         })
     
-    if db.query(models.User).filter(models.User.email == email).first():
+    email_stmt = select(models.User).where(models.User.email == email)
+    existing_email = await db.execute(email_stmt)
+    if existing_email.scalar_one_or_none():
         return templates.TemplateResponse(request, "register.html",
         {
             "error_message": "Email already registered",
@@ -497,7 +688,7 @@ async def register(
         email=email,
         hashed_password=hashed_password)
     db.add(user)
-    db.commit()
+    await db.commit()
     
     return templates.TemplateResponse(request, "login.html", 
         {   
@@ -517,10 +708,10 @@ async def delmess(
     request: Request,
     uuid: str,
     session_id: str,
-    db: Session = Depends(get_db)):
-    
+    db: AsyncSession = Depends(get_db),
+):
     redirect_url = request.url_for("chat", session_id=session_id)
-    if not delete_message_with_attachments(db, uuid):
+    if not await delete_message_with_attachments(db, uuid):
         wm = f"Smth goes wrong, check logs. Conversation restored from database"
         redirect_url = redirect_url.include_query_params(
             warning_message=f"{wm}")
@@ -597,15 +788,15 @@ async def chat(
     session_id: str,
     parent_session_id: str = "",
     warning_message: str = "",
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    user = get_current_user(request, db)
+    user = await get_current_user(request, db)
     if not user:
         return RedirectResponse(
             url="/login", status_code=status.HTTP_302_FOUND)
 
     # restore user conversations
-    user_convs = get_conversations_with_earliest_messages(db, user)
+    user_convs = await get_conversations_with_earliest_messages(db, user)
 
     prev_convs_html = ''.join(
         CONV_TEMPLATE.render(
@@ -644,7 +835,7 @@ async def chat(
         right_container_html = RC_TEMPLATE.render()
 
     prev_messages_html = ""
-    messages = get_conversation_messages(db, session_id=session_id)    
+    messages = await get_conversation_messages(db, session_id=session_id)    
     if messages:
         message_history = []
         for m in reversed(messages):
@@ -655,7 +846,7 @@ async def chat(
                         "bot_message": m.content,
                         "uuid": m.message_uuid
                      })
-                graph_logs_records = get_message_graphlogs(db, m)
+                graph_logs_records = await get_message_graphlogs(db, m)
                 if graph_logs_records:
                     # There are Graph Logs in conversation, lets check if 
                     # current graph has templates to render logs.
@@ -667,7 +858,7 @@ async def chat(
                             f"{item.item_type}: {entry.content_to_send()}</div>")
                         graph_logs_html.append(graph_content)
             else:
-                attachments = get_message_attachments(db, m)
+                attachments = await get_message_attachments(db, m)
                 user_message = MessageInput(
                     message=m.content, 
                     attachments=[
@@ -692,7 +883,7 @@ async def chat(
         # TODO For more advance graph flow it might be nessary to save and      #
         # be able to deserialize not only messages but at least the last state  # 
         # within the history of outputs (LogAttributes). Should be implemented  #
-        # in future relises.                                                     #  
+        # in future relises.                                                    #  
         # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
         
         graphai.update_state(config, {"messages": message_history})
@@ -721,15 +912,15 @@ async def delconv(
     request: Request,
     session_id: str,
     parent_session_id: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    user = get_current_user(request, db)
+    user = await get_current_user(request, db)
     if not user:
         return RedirectResponse(
             url="/login", status_code=status.HTTP_302_FOUND)
     try:
-        conv = get_conversation(db, user, session_id)
-        delete_conversation_and_related(db, conv)
+        conv = await get_conversation(db, user, session_id)
+        await delete_conversation_and_related(db, conv)
         e = f"Conversation {conv.session_uuid} was deleted from database"
         if session_id == parent_session_id:
             GM.remove_session(parent_session_id, with_graph=True)
@@ -767,9 +958,9 @@ async def get_graphs_list(
 async def get_user_details(
     request: Request,
     session_id: str,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):  
-    user = get_current_user(request, db)
+    user = await get_current_user(request, db)
     if not user:
         return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
     
@@ -785,9 +976,9 @@ async def get_user_details(
 async def get_user_details(
     request: Request,
     session_id: str,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):  
-    user = get_current_user(request, db)
+    user = await get_current_user(request, db)
     if not user:
         return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
     
@@ -805,9 +996,9 @@ async def send_input_message(
     session_id: str,
     message: str = Form(...),
     file: UploadFile | List[UploadFile] | None = None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
-    user = get_current_user(request, db)
+    user = await get_current_user(request, db)
     if not user:
         return RedirectResponse(url="/", status_code=status.HTTP_303_SEE_OTHER)
     session = GM.get_session(session_id)
@@ -829,47 +1020,10 @@ async def send_input_message(
 
 @app.post("/hardstopstream/{session_id}", response_class=JSONResponse)
 async def send_input_message(
-    request: Request,
     session_id: str,
 ):
     await SMH.put_interrupt_flag(session_id)
     return JSONResponse({"status": "processing_stop"})
-
-
-def process_chunk(
-    db: Session,
-    message_uuid: str,
-    conv: models.Conversation,
-    chunk_type: Literal["messages", "values"],
-    stream_data: Union[Tuple, Dict],
-)-> Generator:
-    
-    match chunk_type:
-        case "messages":
-            chunk, _ = stream_data
-            if isinstance(chunk, AIMessageChunk):
-                if chunk.content:
-                    data = json.dumps({"content": chunk.content})
-                    yield (f"data: {data}\n\n", chunk.content)
-    
-        case "values":
-            for node_name, logged_attr in stream_data.items():
-                if isinstance(logged_attr, LoggedAttribute):
-                    for item in logged_attr:
-                                                                        
-                        db.add(create_graphlog_record(
-                            message_uuid=message_uuid,
-                            conv=conv,
-                            item_node=node_name,
-                            item_type=item.type,
-                            item_content=item.content_to_store()
-                        ))
-                        data = json.dumps(
-                            {
-                                "Node": f'{node_name} - {item.type}',
-                                "content": item.content_to_send()
-                            })
-                        yield (f"event: agent_log\ndata: {data}\n\n", "")
 
 
 async def check_stop_signal(queue, session_id):
@@ -884,100 +1038,135 @@ async def check_stop_signal(queue, session_id):
 async def stream_endpoint(
     request: Request,
     session_id: str,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
     ):
         
-    user = get_current_user(request, db)
+    user = await get_current_user(request, db)
     if not user:
         return RedirectResponse(url="/", status_code=status.HTTP_303_SEE_OTHER)
-    conv = get_conversation(db, user, session_id)
+    conv = await get_conversation(db, user, session_id)
     session = GM.get_session(session_id)    
     graphai = session.graph.graph_call
+
     async def stream_generator(session_id):
         """ Direct stream data for a specific session """
         try:
-            user_message = await SMH.get_queue(session_id)
-            user_message.uuid = str(uuid4())
-            db.add(create_message_record(
-                user_message.uuid,
-                user_message.message,
-                conv, 
-                is_bot=False))
-            input_message = HumanMessage(content=[
-                {"type": "text", "text": user_message.message}])
-            if user_message.attachments:
-
-                # Add all attachments in proper format
-                input_message.content.extend(
-                    chain.from_iterable(
-                        attch.formatted_content 
-                        for attch in user_message.attachments))
+            # Start a transactions
+            async with db.begin():
+                user_message = await SMH.get_queue(session_id)
+                user_message.uuid = str(uuid4())
+            
+                db.add(create_message_record(
+                    user_message.uuid,
+                    user_message.message,
+                    conv, 
+                    is_bot=False))
+            
+                input_message = HumanMessage(content=[
+                    {"type": "text", "text": user_message.message}])
                 
-                # Create and add attachment records to db
-                db.add_all([
-                    create_attachment_record(
-                        message_uuid=user_message.uuid,
-                        conv=conv,
-                        attch=attch
-                    ) for attch in user_message.attachments
-                ])
-            db.commit()
+                if user_message.attachments:
 
-            # send user message as html keeping original formatting
-            yield send_user_message(user_message)
-            
-            # Here we send only html template where the content will be 
-            # streamed
-            bot_message_uuid = str(uuid4())
-            yield send_chunk_template(bot_message_uuid)
+                    # Add all attachments in proper format
+                    input_message.content.extend(
+                        chain.from_iterable(
+                            attch.formatted_content 
+                            for attch in user_message.attachments
+                        )
+                    )
+                    
+                    # Create and add attachment records to db
+                    db.add_all([
+                        create_attachment_record(
+                            message_uuid=user_message.uuid,
+                            conv=conv,
+                            attch=attch
+                        ) for attch in user_message.attachments
+                    ])
 
-            config = {"configurable": {"thread_id": session_id}}
-            bot_message = ''
-            
-            next_node = graphai.get_state(config).next
-            if len(next_node):
-                logger.info((
-                    f"Graph {session.graph.name} on node {next_node}: "
-                    "user input required"))
-                stream_in = Command(resume=input_message)
-            else:
-                stream_in = {"messages": [input_message]}
-
-            async for chunk_type, stream_data in graphai.astream(
-                stream_in,
-                config=config,
-                stream_mode=["messages", "values"]):
+                # send user message as html keeping original formatting
+                yield send_user_message(user_message)
                 
-                # Check for stop signal again after each chunk processing
-                if await check_stop_signal(SMH.interrupt_queues, session_id):
-                    raise StreamHandlerError("User stopped streaming!")
+                # Here we send only html template where the content will be 
+                # streamed
+                bot_message_uuid = str(uuid4())
+                yield send_chunk_template(bot_message_uuid)
 
-                for out in process_chunk(
-                    db=db,
-                    message_uuid=bot_message_uuid,
-                    conv=conv,
-                    chunk_type=chunk_type,
-                    stream_data=stream_data):
-
-                    to_post, bot_message_chunk = out
-                    bot_message += bot_message_chunk
-
-                    yield to_post
+                config = {"configurable": {"thread_id": session_id}}
+                bot_message = ''
             
-            bot_message_item = create_message_record(
-                message_uuid=bot_message_uuid,
-                message=bot_message, 
-                conv=conv, 
-                is_bot=True)
-            db.add(bot_message_item)
-            db.commit()
+                # BUG WITH REPITENESS
+                next_node = graphai.get_state(config).next
+                if len(next_node):
+                    logger.info((
+                        f"Graph {session.graph.name} on node {next_node}: "
+                        "user was required"))
+                    stream_in = Command(resume=input_message)
+                else:
+                    stream_in = {"messages": [input_message]}
+
+                last_message = None
+                async for chunk_type, stream_data in graphai.astream(
+                    stream_in,
+                    config=config,
+                    stream_mode=["messages", "values"]):
+                    
+                    # Check for stop signal again after each chunk processing
+                    if await check_stop_signal(SMH.interrupt_queues, session_id):
+                        raise StreamHandlerError("User stopped streaming!")
+
+                    match chunk_type:
+                        case "messages":
+                            chunk, graph_metas = stream_data
+                            if isinstance(chunk, AIMessageChunk):
+                                if chunk.content:
+                                    data = json.dumps({"content": chunk.content})
+                                    bot_message += chunk.content
+                                    yield f"data: {data}\n\n"
+                            else:
+                                pass
+
+                        case "values":
+                            if val := stream_data.get("messages", None):
+                                if isinstance(val, List):
+                                    val = val[-1]
+                                if isinstance(val, AIMessage):
+                                    # DEBUG this part !!!!!!!!!!!!
+                                    if val != last_message:
+                                        bot_message_item = create_message_record(
+                                            message_uuid=bot_message_uuid,
+                                            message=val.content, 
+                                            conv=conv, 
+                                            is_bot=True)
+                                        db.add(bot_message_item)
+                                        last_message = val
+                        
+                            for state_attr, val in stream_data.items():
+                                if isinstance(val, LoggedAttribute):
+                                    for item in val:                        
+                                        db.add(create_graphlog_record(
+                                            message_uuid=bot_message_uuid,
+                                            conv=conv,
+                                            item_node=state_attr,
+                                            item_type=item.type,
+                                            item_content=item.content_to_store()
+                                        ))
+                                        data = json.dumps(
+                                            {
+                                                "State": f'{state_attr}-{item.type}',
+                                                "content": item.content_to_send()
+                                            })
+                                        yield f"event: agent_log\ndata: {data}\n\n"
+                await db.commit()
 
         except StreamHandlerError as e:
+            await db.rollback()
             yield sys_message(
                 message=(f"{e}"),
                 message_type="warning")
 
         except AttachmentProcessingError as e:
+            await db.rollback()
             yield sys_message(
                 message=(
                     "File extension in the attachment is not supported. "
@@ -986,6 +1175,7 @@ async def stream_endpoint(
 
         except Exception as e:
             # Clean up stream when cancelled
+            await db.rollback()
             yield sys_message(
                 message=(
                     "System: Shit happens. Nobody ever promised you a "

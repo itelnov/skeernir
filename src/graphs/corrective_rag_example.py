@@ -1,6 +1,6 @@
 import sys
 import json
-from typing import List, TypedDict, Dict, Any, Optional, Type, TypeVar
+from typing import List, TypedDict, Dict, Any, Optional, Type, TypeVar, Annotated
 from uuid import uuid4
 
 from pydantic import BaseModel as DataBaseModel
@@ -18,9 +18,11 @@ from langchain_community.tools.tavily_search import TavilySearchResults
 from langchain_community.utilities.tavily_search import TavilySearchAPIWrapper
 from langgraph.graph import END, StateGraph
 from langgraph.checkpoint.memory import MemorySaver
+from langgraph.graph import add_messages
 from jinja2.environment import Template
 from fastapi.templating import Jinja2Templates
-from langchain_core.messages import RemoveMessage
+from langchain_core.messages import RemoveMessage, AnyMessage
+
 
 
 # for testing purposes:
@@ -55,7 +57,7 @@ class FlowState(TypedDict):
         documents: list of documents
     """
 
-    messages: str
+    messages: Annotated[list[AnyMessage], add_messages]
     generation: str
     web_search: bool
     documents: List[Document]
@@ -214,7 +216,7 @@ def get_generation_chain(api_token: str) -> Runnable:
         model="gpt-4o-mini-2024-07-18",
         api_key=api_token)
     prompt = hub.pull("rlm/rag-prompt")
-    generation_chain = prompt | llm | StrOutputParser()
+    generation_chain = prompt | llm
     return generation_chain
 
 
@@ -391,8 +393,7 @@ def get_corrective_rag_graph(
         
         return {
             "documents": documents, 
-            "messages": state["messages"], 
-            "generation": generation,
+            "messages": generation,
             "from_graph": LoggedAttribute(content=log_items)
             }
 

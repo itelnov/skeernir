@@ -601,7 +601,6 @@ class OpenAICompatibleChatModel(BaseChatModel):
             model=self.model_name,
             messages=messages,
             stream=True,
-            # stream_options={'include_usage': True}
             **reset_kwargs,
             )
 
@@ -617,10 +616,6 @@ class OpenAICompatibleChatModel(BaseChatModel):
                     run_manager.on_llm_new_token(token, chunk=chunk)
                 
                 yield chunk
-
-        chunk = ChatGenerationChunk(
-            message=AIMessageChunk(content="", response_metadata={}))
-        yield chunk
 
     @property
     def _llm_type(self) -> str:

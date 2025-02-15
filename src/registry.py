@@ -489,7 +489,7 @@ class GraphManager:
             gc.collect()
         
 
-    def terminate_all(self) -> None:
+    async def terminate_all(self) -> None:
         """
         Unconditionally terminates all sessions, graphs, and their associated
         processes and threads. This is a destructive operation that should be

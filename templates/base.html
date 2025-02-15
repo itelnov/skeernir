@@ -206,8 +206,8 @@
 
                         const logDiv = document.createElement('div');
                         const { content: logItem } = logMessage;
-                        const { Node: node } = logMessage;
-                        logDiv.innerHTML = `${node}: ${logItem}`;
+                        const { State: state } = logMessage;
+                        logDiv.innerHTML = `${state}: ${logItem}`;
                         target.appendChild(logDiv);
                         target.scrollTop = target.scrollHeight;
 

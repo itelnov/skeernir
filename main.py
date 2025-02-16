@@ -8,7 +8,7 @@ from itertools import chain
 
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
-from typing import Optional, List, Dict, AsyncGenerator
+from typing import Optional, List, Dict, AsyncGenerator, Tuple
 from fastapi.staticfiles import StaticFiles
 from fastapi import (
     FastAPI,
@@ -27,7 +27,7 @@ from fastapi.templating import Jinja2Templates
 from fastapi.security import HTTPBasic
 from fastapi.middleware.cors import CORSMiddleware
 from langchain_core.messages import AIMessageChunk, HumanMessage, AIMessage
-from sqlalchemy import create_engine, desc, select, delete
+from sqlalchemy import create_engine, desc, select, delete, update
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.sql import text
 from sqlalchemy.exc import SQLAlchemyError
@@ -507,6 +507,77 @@ async def delete_message_with_attachments(
         await db.rollback()
         logger.error(f"Error deleting message: {str(e)}")
         return False
+
+
+async def update_con_interrupted_status(
+    db: AsyncSession, 
+    session_uuid: str, 
+    interrupted: bool, 
+    interrupted_value: str
+) -> bool:
+    """
+    Static method to update the interrupted status and value for a conversation 
+    by session_uuid.
+    
+    Args:
+        db (AsyncSession): SQLAlchemy async database session
+        session_uuid (str): The unique session UUID of the conversation
+        interrupted (bool): New interrupted status
+        interrupted_value (str): New interrupted value
+        
+    Returns:
+        bool: True if update was successful, False if conversation not found
+    """
+    try:
+        result = await db.execute(
+            update(models.Conversation)
+            .where(models.Conversation.session_uuid == session_uuid)
+            .values(
+                interrupted=interrupted,
+                interrupted_value=interrupted_value
+            )
+        )
+        
+        await db.commit()
+        
+        return result.rowcount > 0
+        
+    except Exception as e:
+        await db.rollback()
+        raise e
+
+
+async def get_interrupted_status(
+    db: AsyncSession,
+    session_uuid: str
+) -> Optional[Tuple[bool, str]]:
+    """
+    Function to get the interrupted status and value for a 
+    conversation by session_uuid.
+    
+    Args:
+        db (AsyncSession): SQLAlchemy async database session
+        session_uuid (str): The unique session UUID of the conversation
+        
+    Returns:
+        Optional[Tuple[bool, str]]: Tuple of 
+        (interrupted, interrupted_value) if found, None if not found
+    """
+    try:
+        query = select(
+            models.Conversation.interrupted, 
+            models.Conversation.interrupted_value).where(
+            models.Conversation.session_uuid == session_uuid
+        )
+        result = await db.execute(query)
+        row = result.first()
+        
+        interrupted = str(row[0]).lower() == True
+        interrupted_value = str(row[1]) if row[1] is not None else ""  
+        return (interrupted, interrupted_value)
+        
+    except Exception as e:
+        raise e
 
 
 def create_message_record(
@@ -1052,113 +1123,124 @@ async def stream_endpoint(
         """ Direct stream data for a specific session """
         try:
             # Start a transactions
-            async with db.begin():
-                user_message = await SMH.get_queue(session_id)
-                user_message.uuid = str(uuid4())
+            user_message = await SMH.get_queue(session_id)
+            user_message.uuid = str(uuid4())
+        
+            db.add(create_message_record(
+                user_message.uuid,
+                user_message.message,
+                conv, 
+                is_bot=False))
+        
+            input_message = HumanMessage(content=[
+                {"type": "text", "text": user_message.message}])
             
-                db.add(create_message_record(
-                    user_message.uuid,
-                    user_message.message,
-                    conv, 
-                    is_bot=False))
-            
-                input_message = HumanMessage(content=[
-                    {"type": "text", "text": user_message.message}])
-                
-                if user_message.attachments:
+            if user_message.attachments:
 
-                    # Add all attachments in proper format
-                    input_message.content.extend(
-                        chain.from_iterable(
-                            attch.formatted_content 
-                            for attch in user_message.attachments
-                        )
+                # Add all attachments in proper format
+                input_message.content.extend(
+                    chain.from_iterable(
+                        attch.formatted_content 
+                        for attch in user_message.attachments
                     )
-                    
-                    # Create and add attachment records to db
-                    db.add_all([
-                        create_attachment_record(
-                            message_uuid=user_message.uuid,
-                            conv=conv,
-                            attch=attch
-                        ) for attch in user_message.attachments
-                    ])
-
-                # send user message as html keeping original formatting
-                yield send_user_message(user_message)
+                )
                 
-                # Here we send only html template where the content will be 
-                # streamed
-                bot_message_uuid = str(uuid4())
-                yield send_chunk_template(bot_message_uuid)
+                # Create and add attachment records to db
+                db.add_all([
+                    create_attachment_record(
+                        message_uuid=user_message.uuid,
+                        conv=conv,
+                        attch=attch
+                    ) for attch in user_message.attachments
+                ])
 
-                config = {"configurable": {"thread_id": session_id}}
-                bot_message = ''
+            # send user message as html keeping original formatting
+            yield send_user_message(user_message)
+            await db.commit()
             
-                # BUG WITH REPITENESS
-                next_node = graphai.get_state(config).next
-                if len(next_node):
-                    logger.info((
-                        f"Graph {session.graph.name} on node {next_node}: "
-                        "user was required"))
-                    stream_in = Command(resume=input_message)
-                else:
-                    stream_in = {"messages": [input_message]}
+            # Here we send only html template where the content will be 
+            # streamed
+            bot_message_uuid = str(uuid4())
+            yield send_chunk_template(bot_message_uuid)
 
-                last_message = None
-                async for chunk_type, stream_data in graphai.astream(
-                    stream_in,
-                    config=config,
-                    stream_mode=["messages", "values"]):
-                    
-                    # Check for stop signal again after each chunk processing
-                    if await check_stop_signal(SMH.interrupt_queues, session_id):
-                        raise StreamHandlerError("User stopped streaming!")
+            config = {"configurable": {"thread_id": session_id}}
+            bot_message = ''
+        
+            # nex_node will not be empty if we conitunue graph execution after 
+            # it was interrupt
+            was, val = await get_interrupted_status(
+                db=db,
+                session_uuid=session_id
+            )
+            if was:
+                logger.info((
+                    f"Graph {session.graph.name} on value {val}: "
+                    "user was required"))
+                stream_in = Command(resume={val: input_message})
+                await update_con_interrupted_status(
+                    db=db,
+                    session_uuid=session_id,
+                    interrupted=False,
+                    interrupted_value=""
+                    )
+            else:
+                stream_in = {"messages": [input_message]}
 
-                    match chunk_type:
-                        case "messages":
-                            chunk, graph_metas = stream_data
-                            if isinstance(chunk, AIMessageChunk):
-                                if chunk.content:
-                                    data = json.dumps({"content": chunk.content})
-                                    bot_message += chunk.content
-                                    yield f"data: {data}\n\n"
-                            else:
-                                pass
-
-                        case "values":
-                            if val := stream_data.get("messages", None):
-                                if isinstance(val, List):
-                                    val = val[-1]
-                                if isinstance(val, AIMessage):
-                                    # DEBUG this part !!!!!!!!!!!!
-                                    if val != last_message:
-                                        bot_message_item = create_message_record(
-                                            message_uuid=bot_message_uuid,
-                                            message=val.content, 
-                                            conv=conv, 
-                                            is_bot=True)
-                                        db.add(bot_message_item)
-                                        last_message = val
-                        
-                            for state_attr, val in stream_data.items():
+            async for chunk_type, graph_state in graphai.astream(
+                stream_in,
+                config=config,
+                stream_mode=["messages", "updates"]):
+                
+                # Check for stop signal again after each chunk processing
+                if await check_stop_signal(SMH.interrupt_queues, session_id):
+                    raise StreamHandlerError("User stopped streaming!")
+                
+                match chunk_type:
+                    case "messages":
+                        chunk, graph_metas = graph_state
+                        if isinstance(chunk, AIMessageChunk):
+                            if chunk.content:
+                                data = json.dumps({"content": chunk.content})
+                                bot_message += chunk.content
+                                yield f"data: {data}\n\n"
+                        else:
+                            pass
+                
+                    case "updates":
+                        for node, node_updates in graph_state.items():
+                            if node == "__interrupt__":
+                                await update_con_interrupted_status(
+                                    db=db,
+                                    session_uuid=session_id,
+                                    interrupted=True,
+                                    interrupted_value=node_updates[0].value
+                                    )
+                                continue
+                            for state_attr, val in node_updates.items():
                                 if isinstance(val, LoggedAttribute):
                                     for item in val:                        
                                         db.add(create_graphlog_record(
                                             message_uuid=bot_message_uuid,
                                             conv=conv,
-                                            item_node=state_attr,
+                                            item_node=node,
                                             item_type=item.type,
                                             item_content=item.content_to_store()
                                         ))
                                         data = json.dumps(
                                             {
-                                                "State": f'{state_attr}-{item.type}',
+                                                "State": f'{node}-{state_attr}-{item.type}',
                                                 "content": item.content_to_send()
                                             })
                                         yield f"event: agent_log\ndata: {data}\n\n"
-                await db.commit()
-
+                                if isinstance(val, AIMessage):
+                                    bot_message_item = create_message_record(
+                                        message_uuid=bot_message_uuid,
+                                        message=val.content, 
+                                        conv=conv, 
+                                        is_bot=True)
+                                    db.add(bot_message_item)
+                            await db.commit()
+                    
         except StreamHandlerError as e:
             await db.rollback()
             yield sys_message(

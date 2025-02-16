@@ -76,11 +76,6 @@ class FlowState(TypedDict):
             A new FlowState instance with reset values
         """
 
-        # def delete_messages(state):
-        #     messages = state["messages"]
-        #     if len(messages) > 3:
-        #         return {"messages": [RemoveMessage(id=m.id) for m in messages[:-3]]}
-
         fresh_state: T = {
             "messages": state["messages"] if preserve_messages else [
                 RemoveMessage(id=m.id) for m in state["messages"]],
@@ -270,7 +265,7 @@ def get_corrective_rag_graph(
         if isinstance(question, List):
             question = question[0]["text"]
         documents = await retriever.ainvoke(question)
-        
+
         """ We add `from_graph` into state which is defined as LoggedAttribute 
         class. During streaming the output from graph, all classes which inherit 
         from LoggedAttribute class will be considered to log into RIGHT-SIDE 
@@ -278,8 +273,7 @@ def get_corrective_rag_graph(
         details."""
         
         return {
-            "documents": documents, 
-            "messages": state["messages"], 
+            "documents": documents,
             "from_graph": LoggedAttribute(content="Documents retrieved")
             }
 
@@ -308,10 +302,10 @@ def get_corrective_rag_graph(
             else:
                 web_search = True
                 continue
+        
         return {
-            "documents": filtered_docs, 
-            "messages": state["messages"],
             "web_search": web_search,
+            "documents": filtered_docs,
             "from_graph": LoggedAttribute(content=(
                 f"Documents graded. Filtered documents: {len(filtered_docs)}"
                 f" Web search required: {str(web_search)}"))
@@ -334,8 +328,6 @@ def get_corrective_rag_graph(
         web_docs = await web_search_tool.ainvoke({"query": question})
         if "Exception" in web_docs:
             return {
-                "documents": documents, 
-                "messages": state["messages"],
                 "from_graph": LoggedAttribute(
                     content="Web search failed, continue")
                     }
@@ -353,10 +345,9 @@ def get_corrective_rag_graph(
             documents.extend(web_docs)
         else:
             documents = web_docs
-        
+            
         return {
-            "documents": documents, 
-            "messages": state["messages"],
+            "documents": documents,
             "from_graph": LoggedAttribute(content="Web search results added")
                 }
 
@@ -392,7 +383,6 @@ def get_corrective_rag_graph(
                 source=doc.metadata.get('source', '')))
         
         return {
-            "documents": documents, 
             "messages": generation,
             "from_graph": LoggedAttribute(content=log_items)
             }

@@ -2,17 +2,13 @@
 import sys
 from uuid import uuid4
 import asyncio
-from typing import Any, Dict, Iterator, List, Optional
+from typing import TypedDict, TypeVar, Annotated, Type
 
 from langgraph.graph import MessagesState, StateGraph, START, END
-from langchain_openai import ChatOpenAI
+from langgraph.graph import add_messages
 from langgraph.checkpoint.memory import MemorySaver
-from langchain_core.messages import AIMessageChunk, BaseMessage
-from langchain_core.runnables import RunnablePassthrough
-from langchain_core.outputs import ChatGenerationChunk
-from langchain.chat_models.base import BaseChatModel
-from langchain_core.callbacks import CallbackManagerForLLMRun
-from pydantic import Field
+from langgraph.types import interrupt
+from langchain_core.messages import RemoveMessage, AnyMessage
 
 # for testing purposes:
 p = "/".join(sys.path[0].split('/')[:-2])
@@ -22,6 +18,28 @@ if p not in sys.path:
 from src.registry import tool_graph
 from utils import PlaceholderModel
 
+
+T = TypeVar('T', bound='FlowState')
+
+
+class FlowState(TypedDict):
+
+    messages: Annotated[list[AnyMessage], add_messages]
+    feedback: Annotated[list[AnyMessage], add_messages]
+    last_decision: str
+
+    @classmethod
+    def reset(cls: Type[T], state: T, preserve_messages: bool = False) -> T:
+
+        fresh_state: T = {
+            "messages": state["messages"] if preserve_messages else [
+                RemoveMessage(id=m.id) for m in state["messages"]],
+            "feedback": state["feedback"] if preserve_messages else [
+                RemoveMessage(id=m.id) for m in state["feedback"]],
+            "last_decision": ""
+        }
+        
+        return fresh_state
 
 
 @tool_graph(name='Ghost', tag="welcom")
@@ -38,16 +56,28 @@ def get_ghost(**kwargs):
 
     model = PlaceholderModel(model_name="Ghost")
     sampling_data["response_text"] = response_text
+    
     # Define the function that calls the model
-    async def call_model(state: MessagesState):
+    async def call_model(state: FlowState):
         response = await model.ainvoke(state["messages"], **sampling_data)
         return {"messages": response}
 
+    async def verify_responce(state: FlowState):
+        feedback = interrupt("Feedback")
+        a = 8
+        feedback1 = interrupt("Feedback2")
+        return {"feedback":[feedback, feedback1]}
+    
+    
     # Define a new graph
     workflow = StateGraph(MessagesState)
     workflow.add_node("chatbot", call_model)
+    workflow.add_node("verify_responce", verify_responce)
+    
     workflow.add_edge(START, "chatbot")
-    workflow.add_edge("chatbot", END)
+    workflow.add_edge("chatbot", "verify_responce")
+    workflow.add_edge("verify_responce", END)
+    
     return workflow.compile(checkpointer=memory), model
 
 

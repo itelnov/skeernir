@@ -6,33 +6,20 @@ import subprocess
 import json
 from uuid import uuid4
 from typing import Union, Tuple
-from typing import List, TypedDict, Dict, Any, Optional, Type, TypeVar
+from typing import Annotated, TypedDict, Dict, Any, Type, TypeVar
 
-from pydantic import BaseModel as DataBaseModel
-from pydantic import Field, field_validator, Field, PrivateAttr
-from langchain_chroma import Chroma
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-from langchain import hub
-from langchain_core.runnables import Runnable, chain
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.documents import Document
-from langchain_core.output_parsers import PydanticToolsParser
-from langchain_core.utils.function_calling import convert_to_openai_tool
-from langchain_core.output_parsers import StrOutputParser
-from langchain_community.tools.tavily_search import TavilySearchResults
-from langchain_community.utilities.tavily_search import TavilySearchAPIWrapper
+
 from langgraph.graph import END, StateGraph
 from langgraph.checkpoint.memory import MemorySaver
-from jinja2.environment import Template
-from fastapi.templating import Jinja2Templates
-from langchain_core.messages import RemoveMessage
+from langchain_core.messages import RemoveMessage, AnyMessage
+
 from ollama import AsyncClient as AsyncOllamaClient
 from ollama import Client as OllamaClient
 from langgraph.graph import MessagesState, StateGraph, START, END
 from langgraph.graph.state import CompiledStateGraph
+from langgraph.graph import add_messages
 from langgraph.types import interrupt
 from pydantic import BaseModel
-from langchain_core.callbacks import AsyncCallbackManagerForToolRun
 from langchain.callbacks.manager import CallbackManager
 from langchain_core.messages import HumanMessage
 from pathlib import Path
@@ -83,14 +70,13 @@ class SourceCode(BaseModel):
 class FlowState(TypedDict):
 
     source: str
-    messages: str
+    messages: Annotated[list[AnyMessage], add_messages]
     deck_draft: str
     feedback: str
     last_decision: str
     web_search: bool
     last_node: str
     deck_code: str
-    __stream_end__: bool = False
 
     @classmethod
     def reset(cls: Type[T], state: T, preserve_messages: bool = False) -> T:
@@ -104,7 +90,6 @@ class FlowState(TypedDict):
             "web_search": False,
             "last_decision": "",
             "deck_code": "",
-            "__stream_end__": False
         }
         
         return fresh_state
@@ -292,8 +277,8 @@ def get_deckgen(
             sampling_data["response_text"] = (
                 "\n\n*************************************************\n\n"
                 "\n\n"
-                "I need your feedback now. Type what to improve or let me "
-                "continue")
+                "I need your feedback now. Type what to improve or type /yes "
+                "to continue")
             _ = await system_messager.ainvoke([], **sampling_data)
             
             state["source"] = user_content
@@ -303,11 +288,9 @@ def get_deckgen(
         
 
         async def verify_drafter(state: FlowState):
-            # state["__stream_end__"] = True
             feedback = interrupt("Feedback")
             state["feedback"] = feedback
             state["last_node"] = VERIFY_DRAFTER
-            # state["__stream_end__"] = False
             return state
 
 
@@ -339,14 +322,17 @@ def get_deckgen(
                     "User: `wtf` -> action: 2\n\n"
                     "User: `it's ok, lets continue` -> action: 1\n\n"
                     )
-                try:
-                    result = tool_caller.invoke(
-                        [state["feedback"]], 
-                        format=UserIntention.model_json_schema(),
-                        **tools_sampling_data)
-                    action = json.loads(result.content)['action']
-                except:
-                    action = 2
+                if state["feedback"] == "/yes":
+                    action == 1
+                else:
+                    try:
+                        result = tool_caller.invoke(
+                            [state["feedback"]], 
+                            format=UserIntention.model_json_schema(),
+                            **tools_sampling_data)
+                        action = json.loads(result.content)['action']
+                    except:
+                        action = 2
                 
                 if int(action) == 2:
                     sampling_data["response_text"] = (

@@ -572,7 +572,7 @@ async def get_interrupted_status(
         result = await db.execute(query)
         row = result.first()
         
-        interrupted = str(row[0]).lower() == True
+        interrupted = bool(int(row[0]))
         interrupted_value = str(row[1]) if row[1] is not None else ""  
         return (interrupted, interrupted_value)
         
@@ -1164,7 +1164,6 @@ async def stream_endpoint(
             yield send_chunk_template(bot_message_uuid)
 
             config = {"configurable": {"thread_id": session_id}}
-            bot_message = ''
         
             # nex_node will not be empty if we conitunue graph execution after 
             # it was interrupt
@@ -1201,7 +1200,6 @@ async def stream_endpoint(
                         if isinstance(chunk, AIMessageChunk):
                             if chunk.content:
                                 data = json.dumps({"content": chunk.content})
-                                bot_message += chunk.content
                                 yield f"data: {data}\n\n"
                         else:
                             pass
@@ -1215,10 +1213,10 @@ async def stream_endpoint(
                                     interrupted=True,
                                     interrupted_value=node_updates[0].value
                                     )
-                                continue
+                                continue                    
                             for state_attr, val in node_updates.items():
                                 if isinstance(val, LoggedAttribute):
-                                    for item in val:                        
+                                    for item in val:
                                         db.add(create_graphlog_record(
                                             message_uuid=bot_message_uuid,
                                             conv=conv,
@@ -1232,13 +1230,18 @@ async def stream_endpoint(
                                                 "content": item.content_to_send()
                                             })
                                         yield f"event: agent_log\ndata: {data}\n\n"
-                                if isinstance(val, AIMessage):
-                                    bot_message_item = create_message_record(
-                                        message_uuid=bot_message_uuid,
-                                        message=val.content, 
-                                        conv=conv, 
-                                        is_bot=True)
-                                    db.add(bot_message_item)
+                                if state_attr == "messages":
+                                    if isinstance(val, AIMessage):
+                                        val = [val]
+                                    for el in val:
+                                        if isinstance(el, AIMessage):
+                                            bot_message_item = create_message_record(
+                                                message_uuid=bot_message_uuid,
+                                                message=el.content, 
+                                                conv=conv, 
+                                                is_bot=True)
+                                            db.add(bot_message_item)
+                                            bot_message_uuid = str(uuid4())
                             await db.commit()
                     
         except StreamHandlerError as e:

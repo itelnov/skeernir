@@ -77,6 +77,7 @@ class FlowState(TypedDict):
     web_search: bool
     last_node: str
     deck_code: str
+    exec_result: str
 
     @classmethod
     def reset(cls: Type[T], state: T, preserve_messages: bool = False) -> T:
@@ -90,6 +91,7 @@ class FlowState(TypedDict):
             "web_search": False,
             "last_decision": "",
             "deck_code": "",
+            "exec_result": ""
         }
         
         return fresh_state
@@ -192,17 +194,17 @@ def get_deckgen(
             env=my_env
             )
 
-        while True:
-            stdout_line = pull_process_a.stdout.readline()
-            stderr_line = pull_process_a.stderr.readline()
+        # while True:
+        #     stdout_line = pull_process_a.stdout.readline()
+        #     stderr_line = pull_process_a.stderr.readline()
             
-            if stdout_line == '' and stderr_line == '' and pull_process_a.poll() is not None:
-                break
+        #     if stdout_line == '' and stderr_line == '' and pull_process_a.poll() is not None:
+        #         break
             
-            if stdout_line:
-                logging.info(f"STDOUT: {stdout_line.strip()}")
-            if stderr_line:
-                logging.info(f"STDERR: {stderr_line.strip()}")
+        #     if stdout_line:
+        #         logging.info(f"STDOUT: {stdout_line.strip()}")
+        #     if stderr_line:
+        #         logging.info(f"STDERR: {stderr_line.strip()}")
 
 
         port2 = port + 77
@@ -223,17 +225,17 @@ def get_deckgen(
             env=my_env
             )
 
-        while True:
-            stdout_line = pull_process_b.stdout.readline()
-            stderr_line = pull_process_b.stderr.readline()
+        # while True:
+        #     stdout_line = pull_process_b.stdout.readline()
+        #     stderr_line = pull_process_b.stderr.readline()
             
-            if stdout_line == '' and stderr_line == '' and pull_process_b.poll() is not None:
-                break
+        #     if stdout_line == '' and stderr_line == '' and pull_process_b.poll() is not None:
+        #         break
             
-            if stdout_line:
-                logging.info(f"STDOUT: {stdout_line.strip()}")
-            if stderr_line:
-                logging.info(f"STDERR: {stderr_line.strip()}")
+        #     if stdout_line:
+        #         logging.info(f"STDOUT: {stdout_line.strip()}")
+        #     if stderr_line:
+        #         logging.info(f"STDERR: {stderr_line.strip()}")
 
         
         generator = OllamaClientWrapper(
@@ -254,15 +256,13 @@ def get_deckgen(
 
         system_messager = PlaceholderModel(model_name="ghost")
 
-
         async def run_drafter(state: FlowState):
             
             user_content = state["messages"]
             generator.system_message = DRAFTER_SYSTEM_MESSAGE
 
             if state.get("last_node", "") == VERIFY_DRAFTER:                
-                # user_content = flatten_list([
-                #     state["deck_draft"], state["feedback"]])
+
                 generator.system_message = "You are helpfull assistant"
                 user_message = get_drafter_prompt_to_improve(
                     state["deck_draft"].content,
@@ -272,7 +272,6 @@ def get_deckgen(
                     {"type": "text", "text": user_message}])]
                 
             generated = await generator.ainvoke(user_content, **sampling_data)
-            # state["__stream_end__"]
 
             sampling_data["response_text"] = (
                 "\n\n*************************************************\n\n"
@@ -281,17 +280,19 @@ def get_deckgen(
                 "to continue")
             _ = await system_messager.ainvoke([], **sampling_data)
             
-            state["source"] = user_content
-            state["deck_draft"] = generated
-            state["last_node"] = DRAFTER
-            return state
+            return {
+                "deck_draft": generated,
+                "messages": [generated, _],
+                "last_node": DRAFTER
+            }
         
 
         async def verify_drafter(state: FlowState):
-            feedback = interrupt("Feedback")
-            state["feedback"] = feedback
-            state["last_node"] = VERIFY_DRAFTER
-            return state
+            feedback = interrupt("Feedback")["Feedback"]
+            return {
+                "feedback": feedback,
+                "last_node": VERIFY_DRAFTER
+            }
 
 
         async def clean_up(state: FlowState) -> Dict[str, Any]:
@@ -322,16 +323,16 @@ def get_deckgen(
                     "User: `wtf` -> action: 2\n\n"
                     "User: `it's ok, lets continue` -> action: 1\n\n"
                     )
-                if state["feedback"] == "/yes":
-                    action == 1
+                if state["feedback"].content[0]["text"] == "/yes":
+                    action = 1
                 else:
                     try:
                         result = tool_caller.invoke(
-                            [state["feedback"]], 
+                            [state["feedback"]["Feedback"]], 
                             format=UserIntention.model_json_schema(),
                             **tools_sampling_data)
                         action = json.loads(result.content)['action']
-                    except:
+                    except Exception as e:
                         action = 2
                 
                 if int(action) == 2:
@@ -360,17 +361,20 @@ def get_deckgen(
                 end_index = m.index('!FINISH!')
                 deck_draft = str(m[start_index:end_index])
             except ValueError:
-                state["deck_code"] = None
-                return state
+                return {
+                    "deck_code": None
+                }
             
             generator.system_message = get_deckgen_sys_message(output_pth)
             
             user_content = [HumanMessage(content=[
                 {"type": "text", "text": deck_draft}])]
             generated = await generator.ainvoke(user_content, **sampling_data)
-            state["deck_code"] = generated
             
-            return state
+            return {
+                "messages": generated,
+                "deck_code": generated
+            }
 
 
         async def execute_code(state: FlowState):
@@ -382,9 +386,7 @@ def get_deckgen(
                     source_code, allowed_path=output_pth, timeout=15)
             except Exception as e:
                 print(e)
-
-            return state
-        
+            return {"exec_result": stderr}
 
         # Define a new graph
         workflow = StateGraph(MessagesState)

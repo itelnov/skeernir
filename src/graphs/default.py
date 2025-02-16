@@ -63,11 +63,8 @@ def get_ghost(**kwargs):
         return {"messages": response}
 
     async def verify_responce(state: FlowState):
-        feedback = interrupt("Feedback")
-        a = 8
-        feedback1 = interrupt("Feedback2")
-        return {"feedback":[feedback, feedback1]}
-    
+        feedback = interrupt("Feedback")["Feedback"]
+        return {"feedback": feedback}
     
     # Define a new graph
     workflow = StateGraph(MessagesState)

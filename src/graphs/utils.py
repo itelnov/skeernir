@@ -355,6 +355,7 @@ class LlamaCppClient(BaseChatModel):
         # Let's add some other information (e.g., response metadata)
         chunk = ChatGenerationChunk(
             message=AIMessageChunk(content="", response_metadata={
+                "done": True,
                 "tokens_predicted": line_data["tokens_predicted"],
                 "tokens_evaluated": line_data["tokens_evaluated"]}))
 
@@ -471,6 +472,7 @@ class OllamaClientWrapper(BaseChatModel):
             message=AIMessage(
                 content=result['message']['content'], 
                 response_metadata={
+                    "done": True,
                     "eval_count": result["eval_count"],
                     "prompt_eval_count": result["prompt_eval_count"]
                 }

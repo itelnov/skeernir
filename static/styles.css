@@ -115,10 +115,6 @@ ol {
 }
 
 /* ---------------- CHAT ----------------------------------------------------*/
-.user-message {
-    text-wrap: pretty !important;
-    overflow: hidden;
-}
 
 pre[class*=language-] {
    --tw-bg-opacity: 1;

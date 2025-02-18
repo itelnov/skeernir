@@ -450,7 +450,6 @@
                         'conv_list_update', function (event) {
                             const conv_list_obj = JSON.parse(event.data);
                             const targetElement = document.getElementById('conv-list');
-                            // targetElement.replaceWith(conv_list_obj['content']);
                             targetElement.outerHTML = conv_list_obj['content'];
                             htmx.process(document.body);
                     });

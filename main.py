@@ -1218,10 +1218,6 @@ async def stream_endpoint(
                 {"conversation_list": prev_convs_html})
             out =  json.dumps({"content": conv_list_html})
             yield f"event: conv_list_update\ndata: {out}\n\n"
-            # Here we send only html template where the content will be 
-            # streamed
-            # bot_message_uuid = str(uuid4())
-            # yield send_chunk_template(bot_message_uuid)
 
             config = {"configurable": {"thread_id": session_id}}
         
@@ -1260,8 +1256,7 @@ async def stream_endpoint(
                         chunk, graph_metas = graph_state
                         if isinstance(chunk, AIMessageChunk):
                             if new_stream_message:
-                                bot_message_uuid = str(uuid4())
-                                yield send_chunk_template(bot_message_uuid)
+                                yield send_chunk_template(chunk.id)
                                 new_stream_message = False
                             
                             if chunk.content:
@@ -1302,12 +1297,11 @@ async def stream_endpoint(
                                     for el in val:
                                         if isinstance(el, AIMessage):
                                             bot_message_item = create_message_record(
-                                                message_uuid=bot_message_uuid,
+                                                message_uuid=el.id,
                                                 message=el.content, 
                                                 conv=conv, 
                                                 is_bot=True)
                                             db.add(bot_message_item)
-                                            bot_message_uuid = str(uuid4())
                                             new_stream_message = True
                             await db.commit()
                     

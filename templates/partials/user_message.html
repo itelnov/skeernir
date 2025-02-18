@@ -1,46 +1,46 @@
 {% macro render_attachment(attachment) %}
-    <div class="attachment p-2 rounded-lg border border-slate-600">
-        {% if attachment.type in ['image/png', 'image/jpg', 'image/jpeg', 'image/gif'] %}
-            {# Display low-resolution image #}
-            {% if attachment.processed_content %}
-                {# In-memory image data (base64 encoded) #}
-                <img src="data:{{ attachment.type }};base64,{{ attachment.processed_content }}" 
-                     alt="{{ attachment.filename }}" 
-                     class="attachment-image low-res"
-                     style="max-width: 100px; max-height: 100px; object-fit: contain;"
-                >
-            {% endif %}
-        {% else %}
-            {# Display file icon with filename #}
-            <div class="file-attachment">
-                <svg xmlns="http://www.w3.org/2000/svg"
-                     width="24"
-                     height="24"
-                     viewBox="0 0 24 24"
-                     fill="none"
-                     stroke="currentColor"
-                     stroke-width="2"
-                     stroke-linecap="round"
-                     stroke-linejoin="round"
-                     class="feather feather-file">
-                    <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
-                    <polyline points="13 2 13 9 20 9"></polyline>
-                </svg>
-                <span class="filename">{{ attachment.filename }}</span>
-                {% if attachment.size %}
-                    <span class="filesize">({{ attachment.size|filesizeformat }})</span>
-                {% endif %}
-            </div>
+<div class="attachment p-2 rounded-lg border border-slate-600 shadow-2xl shadow-black">
+    {% if attachment.type in ['image/png', 'image/jpg', 'image/jpeg', 'image/gif'] %}
+        {# Display low-resolution image #}
+        {% if attachment.processed_content %}
+            {# In-memory image data (base64 encoded) #}
+            <img src="data:{{ attachment.type }};base64,{{ attachment.processed_content }}" 
+                    alt="{{ attachment.filename }}" 
+                    class="attachment-image low-res"
+                    style="max-width: 100px; max-height: 100px; object-fit: contain;"
+            >
         {% endif %}
-    </div>
+    {% else %}
+        {# Display file icon with filename #}
+        <div class="file-attachment ">
+            <svg xmlns="http://www.w3.org/2000/svg"
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="feather feather-file">
+                <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
+                <polyline points="13 2 13 9 20 9"></polyline>
+            </svg>
+            <span class="filename">{{ attachment.filename }}</span>
+            {% if attachment.size %}
+                <span class="filesize">({{ attachment.size|filesizeformat }})</span>
+            {% endif %}
+        </div>
+    {% endif %}
+</div>
 {% endmacro %}
 <div class="mb-1" id="user-message-{{uuid}}">
     <div class="flex flex-col">
-        <div class="flex justify-end m-1 w-full">
+        <div class="flex justify-end m-1 px-2">
             <div class="user-message">
                 <div class="flex flex-col bg-indigo-800 rounded-lg py-2 px-3 shadow-2xl shadow-black">
                     {{ message | markdown_to_html | safe }}
-                    <div class="h-4 flex flex-row justify-end relative">
+                    <div class="h-4 flex flex-row justify-end">
                         <div></div>
                         <button
                             hx-get="/remove_message/{{uuid}}"
@@ -48,13 +48,13 @@
                             hx-target="#main_chat"
                             hx-swap="outerHTML"
                             hx-vals='js:{session_id: document.getElementById("main_chat").dataset.sessionId}'                            
-                            class="mess-del-button bg-indigo-800 text-sm text-gray-300">
+                            class="mess-del-button text-xs text-gray-300">
                             delete
                         </button>
                     </div>
                 </div>
                 {% if attachments %}
-                <div class="flex flex-row m-2 p-2 rounded-sm ">
+                <div class="flex flex-row m-2 p-2 rounded-lg">
                     {% for attachment in attachments %}
                         {{ render_attachment(attachment) }}
                     {% endfor %}

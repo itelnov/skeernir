@@ -326,13 +326,13 @@ async def get_message_attachments(
 #     return message_graphlogs
 
 
-async def get_message_graphlogs(
+async def get_graphlogs(
     db: AsyncSession,
-    message: models.Message
+    session_uuid: str,
 ) -> List[models.GraphLog]:
     stmt = (
         select(models.GraphLog)
-        .where(models.GraphLog.message_uuid == message.message_uuid)
+        .where(models.GraphLog.session_uuid == session_uuid)
     )
     result = await db.execute(stmt)
     return result.scalars().all()
@@ -618,14 +618,12 @@ def create_attachment_record(
 
 
 def create_graphlog_record(
-    message_uuid: str,
     conv: models.Conversation,
     item_node: str,
     item_type: str,
     item_content: str,
 ):
     graphlog_item = models.GraphLog(
-        message_uuid = message_uuid,
         session_uuid = conv.session_uuid,
         item_node = item_node,
         item_type = item_type,
@@ -909,6 +907,19 @@ async def chat(
 
     prev_messages_html = ""
     messages = await get_conversation_messages(db, session_id=session_id)    
+    
+    graph_logs_records = await get_graphlogs(db, session_id)
+    if graph_logs_records:
+        # There are Graph Logs in conversation, lets check if 
+        # current graph has templates to render logs.
+        for item in graph_logs_records:
+            entry = ENTRY_TYPE_REGISTRY[
+                item.item_type].restore_from_record(item)
+            graph_content = (
+                f"<div>{item.item_node} - "
+                f"{item.item_type}: {entry.content_to_send()}</div>")
+            graph_logs_html.append(graph_content)    
+    
     if messages:
         message_history = []
         for m in reversed(messages):
@@ -919,17 +930,6 @@ async def chat(
                         "bot_message": m.content,
                         "uuid": m.message_uuid
                      })
-                graph_logs_records = await get_message_graphlogs(db, m)
-                if graph_logs_records:
-                    # There are Graph Logs in conversation, lets check if 
-                    # current graph has templates to render logs.
-                    for item in graph_logs_records:
-                        entry = ENTRY_TYPE_REGISTRY[
-                            item.item_type].restore_from_record(item)
-                        graph_content = (
-                            f"<div>{item.item_node} - "
-                            f"{item.item_type}: {entry.content_to_send()}</div>")
-                        graph_logs_html.append(graph_content)
             else:
                 attachments = await get_message_attachments(db, m)
                 user_message = MessageInput(
@@ -1008,19 +1008,6 @@ async def delconv(
         response = RedirectResponse(
             url=redirect_url, status_code=status.HTTP_302_FOUND)
         return response
-
-
-# async def gen_conv_list_html()
-#     user_convs = await get_conversations_with_earliest_messages(db, user)
-#     prev_convs_html = ''.join(
-#         CONV_TEMPLATE.render(
-#             session_id=conv['session_id'],
-#             conv_tag=str(conv['earliest_message']),
-#             parent_session_id=session_id
-#         )
-#         for conv in reversed(user_convs)
-#     ) if user_convs else '' 
-#     return 
 
 
 @app.get("/get_convs_lists/{session_id}", response_class=HTMLResponse)
@@ -1205,7 +1192,8 @@ async def stream_endpoint(
             yield send_user_message(user_message)
             await db.commit()
 
-            user_convs = await get_conversations_with_earliest_messages(db, user)
+            user_convs = await get_conversations_with_earliest_messages(
+                db, user)
             prev_convs_html = ''.join(
                 CONV_TEMPLATE.render(
                     session_id=conv['session_id'],
@@ -1279,7 +1267,6 @@ async def stream_endpoint(
                                 if isinstance(val, LoggedAttribute):
                                     for item in val:
                                         db.add(create_graphlog_record(
-                                            message_uuid=bot_message_uuid,
                                             conv=conv,
                                             item_node=node,
                                             item_type=item.type,

@@ -17,7 +17,6 @@ from sqlalchemy import (
 Base = declarative_base()
 
 # Database models
-
 class User(Base):
     __tablename__ = "users"
     id = Column(Integer, primary_key=True, index=True)
@@ -109,7 +108,6 @@ class GraphLog(Base):
     id = Column(Integer, primary_key=True, index=True)
     graphlog_uuid = Column(
         String, default=lambda: str(uuid.uuid4()), unique=True, index=True)
-    message_uuid = Column(String, ForeignKey("messages.message_uuid"), nullable=False)
     session_uuid = Column(String, ForeignKey("conversations.session_uuid"), nullable=False)
     item_node = Column(String, nullable=False)
     item_type = Column(String, nullable=False)

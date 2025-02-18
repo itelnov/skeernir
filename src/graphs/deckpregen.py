@@ -23,7 +23,7 @@ from pydantic import BaseModel
 from langchain.callbacks.manager import CallbackManager
 from langchain_core.messages import HumanMessage
 from pathlib import Path
-from deckgen.utils import run_restricted_code
+from deckgen.utils import run_code
 
 
 # for testing purposes:
@@ -76,8 +76,8 @@ class FlowState(TypedDict):
     last_decision: str
     web_search: bool
     last_node: str
-    deck_code: str
-    exec_result: str
+    deck_code: Annotated[list[AnyMessage], add_messages]
+    exec_required: bool = False
 
     @classmethod
     def reset(cls: Type[T], state: T, preserve_messages: bool = False) -> T:
@@ -90,8 +90,9 @@ class FlowState(TypedDict):
             'last_node': "",
             "web_search": False,
             "last_decision": "",
-            "deck_code": "",
-            "exec_result": ""
+            "deck_code": state["deck_code"] if preserve_messages else [
+                RemoveMessage(id=m.id) for m in state["deck_code"]],
+            "exec_required": False
         }
         
         return fresh_state
@@ -103,16 +104,16 @@ DECKGEN_FORMAT = (
     "- Always iclude all parts of the deck into draft, starting from `Slide 1`. "       
     "- Do not consider formatting options for the draft, you have to focus "
     "on content only.\n"
-    "- Start writing the deck draft with a tag `!START!`.\n"
-    "- Finish the deck draft with a tag `!FINISH!`.\n"
+    # "- Start writing the deck draft with a tag `!START!`.\n"
+    # "- Finish the deck draft with a tag `!FINISH!`.\n"
     "- Always write suggestions how to improve the deck draft with additrional "
     "information.\n\n"
     "Example of a deck draft:\n"
-    "!START!\n\n"
+    # "!START!\n\n"
     "Slide 1: `some content you generate`\n\n"
     "Slide 2: `some content you generate`\n\n"
     "..."
-    "!FINISH!\n\n"
+    # "!FINISH!\n\n"
     "My Suggestions how to improve: `suggestions for improvement`\n\n"
     "\n\n")
 
@@ -272,14 +273,10 @@ def get_deckgen(
                     {"type": "text", "text": user_message}])]
                 
             generated = await generator.ainvoke(user_content, **sampling_data)
-
             sampling_data["response_text"] = (
-                "\n\n*************************************************\n\n"
-                "\n\n"
                 "I need your feedback now. Type what to improve or type /yes "
                 "to continue")
             _ = await system_messager.ainvoke([], **sampling_data)
-            
             return {
                 "deck_draft": generated,
                 "messages": [generated, _],
@@ -293,17 +290,6 @@ def get_deckgen(
                 "feedback": feedback,
                 "last_node": VERIFY_DRAFTER
             }
-
-
-        async def clean_up(state: FlowState) -> Dict[str, Any]:
-
-            """End node that resets state after processing"""
-            sampling_data["response_text"] = (
-                "\n\nCleaning up...\n\nBye Bye!")
-            _ = await system_messager.ainvoke([], **sampling_data)
-            
-            return FlowState.reset(state, preserve_messages=False)
-
 
         async def should_continue(state: FlowState):
             if state["last_node"] == VERIFY_DRAFTER:
@@ -352,41 +338,68 @@ def get_deckgen(
                 
                 if int(action) == 0:
                     return DRAFTER
-
+                
+            if state["last_node"] == EXECUTOR:
+                if state["exec_required"]:
+                    return DECKGEN
+                return CLEANUP
 
         async def run_deckgen(state: FlowState):
-            try:
-                m = state["deck_draft"].content
-                start_index = m.index('!START!') + len('!START!')
-                end_index = m.index('!FINISH!')
-                deck_draft = str(m[start_index:end_index])
-            except ValueError:
-                return {
-                    "deck_code": None
-                }
-            
             generator.system_message = get_deckgen_sys_message(output_pth)
+            if not state["deck_code"]:
+                try:
+                    m = state["deck_draft"].content
+                    start_index = m.index('<think>')
+                    end_index = m.index('</think>') + len('</think>')
+                    deck_draft = m[:start_index] + "" + m[end_index:]
+                except ValueError:
+                    pass                
+                state["deck_code"] = [HumanMessage(
+                    content=[{"type": "text", "text": deck_draft}])]
             
-            user_content = [HumanMessage(content=[
-                {"type": "text", "text": deck_draft}])]
-            generated = await generator.ainvoke(user_content, **sampling_data)
+            generated = await generator.ainvoke(
+                state["deck_code"], **sampling_data)
+            state["deck_code"].append(generated)
             
             return {
                 "messages": generated,
-                "deck_code": generated
+                "deck_code": state["deck_code"]
             }
-
 
         async def execute_code(state: FlowState):
             try:
                 code_pattern = r'```(?:python|Python|py|Py)\s([\s\S]*?)\s*```'
                 source_code = re.findall(
-                    code_pattern, state["deck_code"].content, re.IGNORECASE)[0]
-                result, stdout, stderr = run_restricted_code(
+                    code_pattern, 
+                    state["deck_code"][-1].content, re.IGNORECASE)[-1]
+                result, stdout, stderr = run_code(
                     source_code, allowed_path=output_pth, timeout=15)
             except Exception as e:
-                print(e)
-            return {"exec_result": stderr}
+                return {
+                    "last_node": EXECUTOR,
+                    "deck_code": e,
+                    "exec_required": True
+                    }
+
+            if stderr:
+                return {
+                    "last_node": EXECUTOR,
+                    "deck_code": stderr,
+                    "exec_required": True
+                    }
+
+            return {
+                "last_node": EXECUTOR,
+                "exec_required": False
+                }
+
+        async def clean_up(state: FlowState) -> Dict[str, Any]:
+
+            """End node that resets state after processing"""
+            sampling_data["response_text"] = (
+                "\n\nCleaning up...\n\nBye Bye!")
+            _ = await system_messager.ainvoke([], **sampling_data)
+            return FlowState.reset(state, preserve_messages=False)
 
         # Define a new graph
         workflow = StateGraph(MessagesState)
@@ -409,7 +422,14 @@ def get_deckgen(
             }
         )
         workflow.add_edge(DECKGEN, EXECUTOR)
-        workflow.add_edge(EXECUTOR, CLEANUP)
+        workflow.add_conditional_edges(
+            source=EXECUTOR,
+            path=should_continue,
+            path_map={
+                DECKGEN: DECKGEN,
+                CLEANUP: CLEANUP
+            }
+        )
         workflow.add_edge(CLEANUP, END)
         memory = MemorySaver()
         app = workflow.compile(checkpointer=memory)

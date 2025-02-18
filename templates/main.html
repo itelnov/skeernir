@@ -64,12 +64,12 @@
         </div>
         <div id="user_settings" class="flex bg-gray-500">
         </div>
-        <div id="left-panel" class="flex flex-col w-56 rounded-r-lg bg-gray-900 relative">
-            <div class="flex flex-col rounded text-left truncate whitespace-nowrap overflow-y-auto text-ellipsis p-2">
+        <div id="left-panel" class="flex flex-col w-56 min-w-[14rem] max-w-[14rem] rounded-r-lg bg-gray-900 shadow-lg shadow-black relative">
+            <div class="flex flex-col w-full rounded text-left truncate whitespace-nowrap overflow-y-auto text-ellipsis p-2">
                 <button
                     id="dropdown-button"
                     type="text"
-                    class="bg-gray-900 w-full mt-2 mb-4 p-2 truncate whitespace-nowrap overflow-y-auto text-ellipsis"
+                    class="bg-gray-900 w-full  min-w-0 mt-2 mb-4 p-2 truncate whitespace-nowrap overflow-hidden text-ellipsis"
                     hx-get="/select_graph/{{session_id}}"
                     hx-trigger="input changed delay:200ms, focus"
                     hx-target="#dropdown-menu"
@@ -81,13 +81,13 @@
                     <div id="dropdown-menu" class="absolute"></div>
                 </div>
             </div>
-            <div class="overflow-y-auto h-full max-h-full text-xs">
+            <div id="conv-list" class="overflow-y-auto h-full max-h-full text-xs">
                 {{ conversation_list | safe }}
             </div>
         </div>
         <div class="flex justify-center w-full px-2 mb-2">
             <div id="chat-container" class="flex flex-col w-full max-w-3xl px-4">
-                <div id="chat-messages" class="overflow-y-auto h-full max-h-full bg-gray-900 rounded-lg shadow-sky-800 shadow-lg p-2">
+                <div id="chat-messages" class="overflow-y-auto h-full max-h-full bg-gray-900 rounded-lg shadow-slate-950 shadow-md p-2">
                     {{ previous_messages | safe }}
                 </div>
                 <div class="flex justify-center mt-4">

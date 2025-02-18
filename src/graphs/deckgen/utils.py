@@ -11,6 +11,7 @@ import multiprocessing
 from multiprocessing import Process, Queue
 import builtins
 import os
+import sys
 from pathlib import Path
 
 
@@ -48,91 +49,89 @@ class SafeFileOps:
         with open(filepath, 'w') as f:
             f.write(content)
 
+
 def get_safe_globals(allowed_path="/tmp/restricted"):
-    safe_env = dict(safe_globals)
-    
+    safe_env = {}
+
     # Create SafeFileOps instance
     safe_file_ops = SafeFileOps(allowed_path)
-    
-    # Add safe file operations to the environment
+
+    # Add safe file operations
     safe_env['open'] = safe_file_ops.safe_open
     safe_env['write_file'] = safe_file_ops.safe_write
-    
-    # Add other safe builtins
-    safe_env['__builtins__'] = {
-        **safe_builtins,
-        '__import__': builtins.__import__,
-        'open': safe_file_ops.safe_open
-    }
-    
-    # Add print collector
-    safe_env['_print_'] = PrintCollector
-    
+
+    # Add all built-ins
+    safe_env.update({
+        name: getattr(builtins, name)
+        for name in dir(builtins)
+        if not name.startswith('_')  # Exclude private attributes
+    })
+
+    # Add specific modules you want to make available
+    modules_to_import = ['os', 'pptx', 'pptx.util']  # Add more as needed
+    for module_name in modules_to_import:
+        try:
+            safe_env[module_name] = importlib.import_module(module_name)
+        except ImportError:
+            pass
+
+    # Add specific classes/functions from modules
+    if 'pptx' in safe_env:
+        safe_env['Presentation'] = safe_env['pptx'].Presentation
+    if 'pptx.util' in safe_env:
+        safe_env['Inches'] = safe_env['pptx.util'].Inches
+
     return safe_env
 
 
 def set_resource_limits(mbs=1000, cpu_time=100):
     try:
-        # Set maximum memory usage
         resource.setrlimit(resource.RLIMIT_AS, (mbs * 1024 * 1024, -1))
-        # Set CPU time limit
         resource.setrlimit(resource.RLIMIT_CPU, (cpu_time, -1))
     except (ValueError, resource.error):
         pass
 
 
-def execute_restricted_code(source_code, allowed_path, result_queue):
+def execute_code(source_code, allowed_path, result_queue):
     try:
-        # set_resource_limits()
-
-        # Capture stdout
         stdout = io.StringIO()
         stderr = io.StringIO()
         with contextlib.redirect_stdout(stdout), \
                 contextlib.redirect_stderr(stderr):
-            byte_code = compile_restricted(
-                source_code,
-                filename='<inline code>',
-                mode='exec'
-            )
-            restricted_globals = get_safe_globals(allowed_path)
-            restricted_locals = {}
 
-            exec(byte_code, restricted_globals, restricted_locals)
-            # Get the result if any
-            result = restricted_locals.get('_result', None)
+            globals_dict = get_safe_globals(allowed_path)
+            locals_dict = {}
+
+            exec(source_code, globals_dict, locals_dict)
+            result = locals_dict.get('_result', None)
 
             result_queue.put(
                 ('success', result, stdout.getvalue(), stderr.getvalue())
-                )
+            )
 
     except Exception as e:
         result_queue.put(('error', None, '', str(e)))
 
 
-def run_restricted_code(
-        source_code, allowed_path="/tmp/restricted", timeout=15):
+def run_code(source_code, allowed_path="/tmp/restricted", timeout=15):
 
     result_queue = Queue()
 
     # Create and start the process
     process = Process(
-        target=execute_restricted_code,
+        target=execute_code,
         args=(source_code, allowed_path, result_queue)
     )
 
     try:
         process.start()
-        # Wait for the process to complete or timeout
         process.join(timeout)
 
-        # If process is still alive after timeout
         if process.is_alive():
             process.terminate()
             process.join()
             return None, '', 'Execution timed out'
 
-        # Get the result if process completed
         if not result_queue.empty():
             status, result, stdout, stderr = result_queue.get()
             if status == 'success':

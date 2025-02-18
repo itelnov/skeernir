@@ -3,8 +3,10 @@ import asyncio
 import logging
 from uuid import uuid4
 import json
+import httpx
 from asyncio.queues import QueueEmpty
 from itertools import chain
+
 
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -16,7 +18,7 @@ from fastapi import (
     UploadFile,
     Form,
     Depends,
-    status
+    status,
     )
 from starlette.middleware.sessions import SessionMiddleware
 from fastapi.responses import (HTMLResponse, 
@@ -80,8 +82,6 @@ AsyncSessionLocal = async_sessionmaker(
     autoflush=False
 )
 
-# models.Base.metadata.create_all(bind=async_engine)
-
 # Example of executing VACUUM command properly
 async def vacuum_database():
     async with AsyncSessionLocal() as session:
@@ -115,6 +115,7 @@ CONV_TEMPLATE = templates.get_template('partials/conversation.html')
 RC_TEMPLATE = templates.get_template('partials/right_container.html')
 SYS_TEMPLATE = templates.get_template('partials/sys_message.html')
 PP_WARNING_TEMPLATE = templates.get_template('partials/popup_warning.html')
+CONVS_LIST = templates.get_template('conversations_lists.html')
 
 
 def sys_message(message: str ="", message_type: str ="warning") -> str:
@@ -686,10 +687,11 @@ async def login(
     password: str = Form(...),
     db: AsyncSession = Depends(get_db),
 ):
-    user = await get_current_user(request, db)
-    
-    if not user or not models.User.verify_password(
-        password, user.hashed_password):
+    user_stmt = select(models.User).where(models.User.username == username)
+    result = await db.execute(user_stmt)
+    existing_user = result.scalar_one_or_none()
+    if not models.User.verify_password(
+        password, existing_user.hashed_password):
         
         return  templates.TemplateResponse(request, "login.html", 
         {   
@@ -698,7 +700,7 @@ async def login(
             "username": username
         })
     
-    request.session["user_id"] = user.id
+    request.session["user_id"] = existing_user.id
     return RedirectResponse(url="/", status_code=303)
 
 
@@ -1002,11 +1004,56 @@ async def delconv(
     except Exception as e:
         logger.error(e)
     finally:
-        redirect_url = request.url_for("chat", session_id=session_id)
-        redirect_url = redirect_url.include_query_params(warning_message=f"{e}")
+        redirect_url = request.url_for("get_convs_list", session_id=session_id)
         response = RedirectResponse(
             url=redirect_url, status_code=status.HTTP_302_FOUND)
         return response
+
+
+# async def gen_conv_list_html()
+#     user_convs = await get_conversations_with_earliest_messages(db, user)
+#     prev_convs_html = ''.join(
+#         CONV_TEMPLATE.render(
+#             session_id=conv['session_id'],
+#             conv_tag=str(conv['earliest_message']),
+#             parent_session_id=session_id
+#         )
+#         for conv in reversed(user_convs)
+#     ) if user_convs else '' 
+#     return 
+
+
+@app.get("/get_convs_lists/{session_id}", response_class=HTMLResponse)
+async def get_convs_list(
+    request: Request,
+    session_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    user = await get_current_user(request, db)
+    if not user:
+        return RedirectResponse(
+            url="/login", status_code=status.HTTP_302_FOUND)
+    prev_convs_html = ''
+    try:
+        # restore user conversations
+        user_convs = await get_conversations_with_earliest_messages(db, user)
+        prev_convs_html = ''.join(
+            CONV_TEMPLATE.render(
+                session_id=conv['session_id'],
+                conv_tag=str(conv['earliest_message']),
+                parent_session_id=session_id
+            )
+            for conv in reversed(user_convs)
+        ) if user_convs else ''    
+    
+    except Exception as e:
+        logger.error(e)
+    finally:
+        return templates.TemplateResponse(request, "conversations_lists.html",
+            {
+                "conversation_list": prev_convs_html,
+            },
+        )
 
 
 @app.get("/select_graph/{session_id}", response_class=HTMLResponse)
@@ -1103,7 +1150,7 @@ async def check_stop_signal(queue, session_id):
         return red_flag.get("stop", False)
     except QueueEmpty:
         return False
-    
+
 
 @app.get("/stream/{session_id}", response_class=StreamingResponse)
 async def stream_endpoint(
@@ -1157,11 +1204,24 @@ async def stream_endpoint(
             # send user message as html keeping original formatting
             yield send_user_message(user_message)
             await db.commit()
-            
+
+            user_convs = await get_conversations_with_earliest_messages(db, user)
+            prev_convs_html = ''.join(
+                CONV_TEMPLATE.render(
+                    session_id=conv['session_id'],
+                    conv_tag=str(conv['earliest_message']),
+                    parent_session_id=session_id
+                )
+                for conv in reversed(user_convs)
+            ) if user_convs else ''
+            conv_list_html = CONVS_LIST.render(
+                {"conversation_list": prev_convs_html})
+            out =  json.dumps({"content": conv_list_html})
+            yield f"event: conv_list_update\ndata: {out}\n\n"
             # Here we send only html template where the content will be 
             # streamed
-            bot_message_uuid = str(uuid4())
-            yield send_chunk_template(bot_message_uuid)
+            # bot_message_uuid = str(uuid4())
+            # yield send_chunk_template(bot_message_uuid)
 
             config = {"configurable": {"thread_id": session_id}}
         
@@ -1184,7 +1244,8 @@ async def stream_endpoint(
                     )
             else:
                 stream_in = {"messages": [input_message]}
-
+            
+            new_stream_message = True
             async for chunk_type, graph_state in graphai.astream(
                 stream_in,
                 config=config,
@@ -1198,6 +1259,11 @@ async def stream_endpoint(
                     case "messages":
                         chunk, graph_metas = graph_state
                         if isinstance(chunk, AIMessageChunk):
+                            if new_stream_message:
+                                bot_message_uuid = str(uuid4())
+                                yield send_chunk_template(bot_message_uuid)
+                                new_stream_message = False
+                            
                             if chunk.content:
                                 data = json.dumps({"content": chunk.content})
                                 yield f"data: {data}\n\n"
@@ -1242,6 +1308,7 @@ async def stream_endpoint(
                                                 is_bot=True)
                                             db.add(bot_message_item)
                                             bot_message_uuid = str(uuid4())
+                                            new_stream_message = True
                             await db.commit()
                     
         except StreamHandlerError as e:
@@ -1268,8 +1335,8 @@ async def stream_endpoint(
                     f"conversation is finished. Additional info:\n\n {e}"),
                 message_type="error")
             
-        finally:
-            yield f"event: streamend\ndata: \n\n"
+        finally:          
+                yield f"event: streamend\ndata: \n\n"
 
     return StreamingResponse(
         stream_generator(session_id),

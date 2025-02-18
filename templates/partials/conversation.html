@@ -15,7 +15,7 @@
     </button>
     <button
         hx-get="/delconv/{{session_id}}"
-        hx-target="#main_chat"
+        hx-target="#conv-list"
         hx-trigger="click"
         hx-swap="outerHTML"
         hx-vals='{"parent_session_id": "{{parent_session_id}}"}'

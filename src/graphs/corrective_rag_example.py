@@ -414,8 +414,8 @@ def get_corrective_rag_graph(
 
     app = workflow.compile(checkpointer=memory)
     
-    # app.get_graph().draw_mermaid_png(
-    #     output_file_path="corrective_rag_graph.png")
+    app.get_graph().draw_mermaid_png(
+        output_file_path="corrective_rag_graph.png")
     
     return app
 

@@ -227,33 +227,7 @@
                         var new_chunk = chunk.replace(/```/g, "|```");
                         return new_chunk.split("|");
                     }
-
-                    // extractMathPatterns(text, pattern = /\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\)/g) {
-                    //     const matches = {};
-                    //     let counter = 0;
-                        
-                    //     const processedText = text.replace(pattern, (match) => {
-                    //         const placeholder = `MATH_PLACEHOLDER_${counter++}N`;
-                    //         matches.push(match);
-                    //         return placeholder;
-                    //     });
-
-                    //     return {
-                    //         processedText,
-                    //         matches
-                    //     };
-                    // }
-
-                    // restoreMathPatterns(text, mapping) {
-                    //     let result = text;
-                    //     if (mapping) {
-                    //         for (const [placeholder, chunk] of Object.entries(mapping)) {
-                    //             result = result.split(placeholder).join(
-                    //                 `${chunk}`);
-                    //         }
-                    //     }
-                    //     return result;
-                    // }                 
+               
                     
                     addChunk(chunk) {
                         this.splitTripleBackticks(chunk).forEach(
@@ -469,6 +443,15 @@
                         'chunk_template', function (event) {
                             const template = JSON.parse(event.data);
                             streamer.addStreamMessage(template);
+                            htmx.process(document.body);
+                    });
+
+                    eventSource.addEventListener(
+                        'conv_list_update', function (event) {
+                            const conv_list_obj = JSON.parse(event.data);
+                            const targetElement = document.getElementById('conv-list');
+                            // targetElement.replaceWith(conv_list_obj['content']);
+                            targetElement.outerHTML = conv_list_obj['content'];
                             htmx.process(document.body);
                     });
 

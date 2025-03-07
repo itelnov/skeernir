@@ -1124,7 +1124,7 @@ async def send_input_message(
 
 
 @app.post("/hardstopstream/{session_id}", response_class=JSONResponse)
-async def send_input_message(
+async def send_stop_message(
     session_id: str,
 ):
     await SMH.put_interrupt_flag(session_id)

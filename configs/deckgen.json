@@ -9,7 +9,7 @@
         "num_ctx": 256
     },
     "sampling": {
-        "temperature": 0.1,
+        "temperature": 0.0,
         "num_ctx": 8192,
         "num_predict": -1
     }

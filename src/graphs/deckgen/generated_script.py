@@ -1,6 +1,4 @@
-from utils import run_code, save_and_run_python
 
-test_string = '''
 from pptx import Presentation
 from pptx.util import Inches
 
@@ -32,17 +30,3 @@ def create_presentation():
 # Execute the function when script runs
 if __name__ == "__main__":
     create_presentation()
-'''
-
-if __name__ == '__main__':
-    print(test_string)
-
-    result, stderr, stderr = save_and_run_python(
-        test_string,
-        allowed_path="/docker_mount/repos/skeernir/src/graphs/deckgen",
-        filename="generated_script.py",
-    )
-
-    print(f"Result: {result}")
-    print(f"Output: {stderr}")
-    print(f"Errors: {stderr}")

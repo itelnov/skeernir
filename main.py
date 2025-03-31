@@ -44,7 +44,7 @@ from langgraph.types import Command
 
 import src.models as models
 from src.graphs.utils import flatten_list
-from src.text_utils import MarkdownConverter
+from src.text_utils import MarkdownConverter, clean_user_text
 from src.entry import LoggedAttribute, get_entry_type_registry
 from src.registry import GraphManager
 from src.messages import (AsyncMessageStreamHandler,
@@ -107,6 +107,8 @@ asyncio.run(init_models())
 templates = Jinja2Templates(directory="templates")
 converter = MarkdownConverter()
 templates.env.filters["markdown_to_html"] = converter.convert
+templates.env.filters["clean_user_text"] = clean_user_text
+
 
 USER_TEMPLATE = templates.get_template("partials/user_message.html")
 CHUNK_TEMPLATE = templates.get_template('partials/chunk_message.html')

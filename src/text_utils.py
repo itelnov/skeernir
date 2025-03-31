@@ -8,6 +8,11 @@ env = Environment(loader=FileSystemLoader("templates"))
 code_template = env.get_template('partials/code_block.html')
 
 
+def clean_user_text(raw_text):
+    raw_text = raw_text.replace('\r\n', '\n')
+    return raw_text
+
+
 class CodeBlockPreprocessor:
     
     def __init__(self):
@@ -134,9 +139,14 @@ class MarkdownConverter:
 
         # Convert markdown to HTML with all extensions
         md = Markdown(extensions=['extra', 'sane_lists'])
-
-        processed_text = html.escape(processed_text)
+        # replace all <pre><code> after makdown convertion with standart 
+        
+        processed_text = html.escape(processed_text, quote=True)
         html_output = md.convert(processed_text)
+        html_output = html_output\
+            .replace('<pre><code>', '<p class="whitespace-pre-wrap break-words">')\
+            .replace("</pre></code>", "</p>")\
+            .replace('<p>', '<p class="whitespace-pre-wrap break-words">')\
 
         # Replace math placeholders with MathJax-ready spans
         for placeholder, math_content in latex_preprocessor.inline_math_blocks.items():
@@ -146,8 +156,7 @@ class MarkdownConverter:
         for placeholder, math_content in latex_preprocessor.display_math_blocks.items():
             html_output = html_output.replace(
                 f"{placeholder}", f'<span class="tmath">{math_content}</span>')
-
-        # TODO insirt as a template !!! 
+        # Replace code block placehokders with Prism.js
         for placeholder, formatted_code in code_processor.code_blocks.items():
             html_output = html_output.replace(f"{placeholder}", formatted_code)
         return html_output

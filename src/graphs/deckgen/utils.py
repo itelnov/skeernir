@@ -13,6 +13,7 @@ import builtins
 import os
 import sys
 from pathlib import Path
+import subprocess
 
 
 class SafeFileOps:
@@ -75,11 +76,11 @@ def get_safe_globals(allowed_path="/tmp/restricted"):
         except ImportError:
             pass
 
-    # Add specific classes/functions from modules
-    if 'pptx' in safe_env:
-        safe_env['Presentation'] = safe_env['pptx'].Presentation
-    if 'pptx.util' in safe_env:
-        safe_env['Inches'] = safe_env['pptx.util'].Inches
+    # # Add specific classes/functions from modules
+    # if 'pptx' in safe_env:
+    #     safe_env['Presentation'] = safe_env['pptx'].Presentation
+    # if 'pptx.util' in safe_env:
+    #     safe_env['Inches'] = safe_env['pptx.util'].Inches
 
     return safe_env
 
@@ -99,21 +100,33 @@ def execute_code(source_code, allowed_path, result_queue):
         with contextlib.redirect_stdout(stdout), \
                 contextlib.redirect_stderr(stderr):
 
-            globals_dict = get_safe_globals(allowed_path)
+            globals_dict = {} # get_safe_globals(allowed_path)
             locals_dict = {}
 
-            exec(source_code, globals_dict, locals_dict)
-            result = locals_dict.get('_result', None)
-
-            result_queue.put(
-                ('success', result, stdout.getvalue(), stderr.getvalue())
-            )
-
+            try:
+                compiled_code = compile(source_code, '<string>', 'exec')
+                exec(compiled_code, globals_dict, locals_dict)
+                result = locals_dict.get('_result', None)
+                result_queue.put(
+                    ('success', result, stdout.getvalue(), stderr.getvalue())
+                )
+            except Exception as e:
+                error_msg = f"Exception in executed code:\n{traceback.format_exc()}"
+                result_queue.put(('error', None, stdout.getvalue(), error_msg))
+    
     except Exception as e:
-        result_queue.put(('error', None, '', str(e)))
+        error_msg = f"Exception in execute_code:\n{traceback.format_exc()}"
+        result_queue.put(('error', None, '', error_msg))
 
 
 def run_code(source_code, allowed_path="/tmp/restricted", timeout=15):
+
+    # Input validation
+    if not isinstance(source_code, str):
+        return None, '', 'Invalid input: source_code must be a string'
+
+    if not source_code.strip():
+        return None, '', 'Empty code string'
 
     result_queue = Queue()
 
@@ -137,7 +150,7 @@ def run_code(source_code, allowed_path="/tmp/restricted", timeout=15):
             if status == 'success':
                 return result, stdout, stderr
             else:
-                return None, stdout, stderr
+                return None, stdout, f"Execution error:\n{stderr}"
 
     except Exception as e:
         return None, '', f'Execution error: {str(e)}'
@@ -149,3 +162,23 @@ def run_code(source_code, allowed_path="/tmp/restricted", timeout=15):
             process.join()
 
     return None, '', 'Execution failed'
+
+
+def save_and_run_python(code, allowed_path, filename="generated_script.py"):
+    """Save extracted Python code to file and execute it."""
+    
+    #### Safe instructions 
+    
+    # Save to file
+    with open(os.path.join(allowed_path, filename), 'w') as f:
+        f.write(code)    
+    # Run the Python code
+    try:
+        result = subprocess.run(
+            ['python', os.path.join(allowed_path, filename)], 
+            capture_output=True, 
+            text=True)
+         
+        return result.returncode == 0, result.stdout, result.stderr
+    except Exception as e:
+        return False, "", f"Error executing code: {e}"

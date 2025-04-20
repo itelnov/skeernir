@@ -1,0 +1,26 @@
+{   
+    "agent_graph": "vllm_server_chat.py",    
+    "host_name": "vllm",
+    "model_path": "/docker_mount/data/Mistral-Small-3.1-24B-AWQ",    
+    "host_params":{
+        "swap-space" : "20",
+        "cpu-offload-gb" : "20",
+        "gpu_memory_utilization" : "0.95",
+        "quantization" : "awq",
+        "max-model-len" : "8000",
+        "dtype" : "float16",
+        "kv-cache-dtype": "fp8_e4m3",
+        "env_variables": {
+            "VLLM_USE_V1": "0"
+        }
+    },
+    "sampling": {
+        "temperature": 0.15,
+        "top_p": 0.9,
+        "top_k": -1,
+        "min_p": 0.0,
+        "repetition_penalty": 1.0,
+        "presence_penalty": 0.0,
+        "frequency_penalty": 0.0
+    }
+}

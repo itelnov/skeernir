@@ -1,0 +1,8 @@
+{
+    "agent_graph": "mistralai_chat.py",
+    "api_token": "NwVgrVtVf235kE61ch8Uh0KUHSMcc89t",
+    "model_name": "codestral-latest",
+    "sampling": {
+        "temperature": 0.2    
+    }
+}

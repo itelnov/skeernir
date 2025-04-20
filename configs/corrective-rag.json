@@ -1,0 +1,6 @@
+{
+    "agent_graph": "corrective_rag_example.py",
+    "model_name": "gpt-4o-mini-2024-07-18",
+    "vectordb_path": "/docker_mount/data/chroma/",
+    "collection_name": "corrective-rag-chroma-example"
+}

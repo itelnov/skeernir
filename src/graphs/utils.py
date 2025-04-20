@@ -19,7 +19,7 @@ from langgraph.graph import MessagesState
 from openai import OpenAI
 from ollama import AsyncClient as AsyncOllamaClient
 from ollama import Client as OllamaClient
-
+from mistralai import Mistral
 from src.registry import GraphManager
 from src.entry import LoggedAttribute
 
@@ -49,7 +49,12 @@ def run_server(
     
     """
     """
+    my_env = os.environ.copy()
+    my_env.update(kwargs.pop("env_variables", {}))
+
     if server == "llamacpp":
+        logging.WARNING(
+            "Llama cpp server doesn not support multimodality for now")
         llamacpp_path = os.environ.get("LLAMA_CPP_PATH", None)
         if not llamacpp_path:
             raise LlamacppException(
@@ -70,6 +75,7 @@ def run_server(
                 ["--clip_model_path", os.path.normpath(clip_model_path)])
         arguments.append("--no-webui")
     
+
     elif server == "vllm":
         vllm_path = os.environ.get("VLLM_PATH", None)
         if not vllm_path:
@@ -78,7 +84,7 @@ def run_server(
         cmd = [vllm_path,  "serve"]
         arguments = [
             model_path,
-            "--port", str(port)
+            "--port", str(port),
         ]
         if not use_gpu:
             #TODO Play with vLLM parameters
@@ -88,51 +94,45 @@ def run_server(
         my_env = os.environ.copy()
         my_env["OLLAMA_HOST"] = f"0.0.0.0:{port}"
         cmd = ["ollama",  "serve"]
-        
+        arguments = []
         if not use_gpu:
             my_env['CUDA_VISIBLE_DEVICES'] = ''
         
-        # Start the subprocess
-        process = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            bufsize=1,
-            env=my_env
-            )
-        logging.info(f"Started process with PID: {process.pid}")
-        return process
-    
     kwargs.pop("sampling", None)
 
     for k, v in kwargs.items():
         if isinstance(v, (dict, list)):
             continue
         if isinstance(v, bool):
-            arguments.append("--" + str(k))
+            if v:
+                arguments.append("--" + str(k))
             continue
         arguments.extend(["--" + str(k), str(v)])
     
     cmd.extend([str(arg) for arg in arguments])
+    
+    # TODO reimplement nicely
+    model_tag = model_path.replace("/", "_")
+    log_file_path = f".logs/server_{server}_model_{model_tag}_logs.txt"
 
     # Start the subprocess
-    process = subprocess.Popen(
-        cmd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        bufsize=1,
-        )
-    logging.info(f"Started process with PID: {process.pid}")
-    
+    with open(log_file_path, "w") as log_file:
+        process = subprocess.Popen(
+            cmd,
+            stdout=log_file,
+            stderr=log_file,
+            text=True,
+            bufsize=1,
+            env=my_env,
+            )
+        logging.info(f"Started process with PID: {process.pid}")
     
     return process
 
 
 def check_server_healthy(
     port: int, 
-    model_name: str, 
+    model_name: str,
     timeout_seconds: int = 100, 
     time_to_wait:int = 10) -> bool:
     
@@ -144,7 +144,7 @@ def check_server_healthy(
                 f"http://0.0.0.0:{port}/v1/models", timeout=5)
             if response.status_code == 200:
                 logging.info(
-                    (f"✓ Graph server is healthy! Model {model_name}" 
+                    (f"✓ Graph server is healthy! Model {model_name}"
                      f" is available. Check http://0.0.0.0:{port}/v1/models")
                     )
                 break
@@ -630,6 +630,93 @@ class OpenAICompatibleChatModel(BaseChatModel):
         return {"model_name": self.model_name}
     
 
+class MistralCompatibleChatModel(BaseChatModel):
+
+    model_name: str
+    client: Mistral
+    model_type: str = "mistral"
+    SYSTEM_MESSAGE: ClassVar[str] = ""
+
+    def __init__(self, model_name: str, client: Mistral, **kwargs):
+        super().__init__(model_name=model_name, client=client, **kwargs)
+
+
+    def _format_message_state(self, state: MessagesState):
+
+        formatted_messages = []
+        if self.SYSTEM_MESSAGE:
+            formatted_messages.append({
+                "role": "system",
+                "content": self.SYSTEM_MESSAGE
+            })
+        for message in state:
+            
+            if isinstance(message, AIMessage):
+                role = "assistant"
+            elif isinstance(message, HumanMessage):
+                role = "user"
+            else:
+                raise ValueError(f"Unknown message type: {type(message)}")
+            
+            message_dict = {
+                "role": role,
+                "content": message.content
+            }
+
+            formatted_messages.append(message_dict)
+
+        return formatted_messages
+
+    def _generate(self, messages, stop = None, run_manager = None, **kwargs):
+        return super()._generate(messages, stop, run_manager, **kwargs)
+    
+    async def _astream(
+        self,
+        messages: List[BaseMessage],
+        run_manager: Optional[CallbackManagerForLLMRun] = None,
+        tools: Optional[Any] = None,
+        **kwargs: Any,
+    ) -> AsyncIterator[ChatGenerationChunk]:
+        
+        formatted_state = self._format_message_state(messages)
+
+        async for part in await self.client.chat.stream_async(
+            model=self.model_name, 
+            messages=formatted_state, 
+            tools=tools,
+            **kwargs):
+
+            content = part.data.choices[0].delta.content
+            if content:
+                chunk = ChatGenerationChunk(
+                    message=AIMessageChunk(content=content)
+                )
+
+                if run_manager:
+                    run_manager.on_llm_new_token(content, chunk=chunk)
+                
+                yield chunk
+
+        # Let's add some other information (e.g., response metadata)
+        chunk = ChatGenerationChunk(
+            message=AIMessageChunk(
+                content="", response_metadata={}
+            )
+        )
+
+        yield chunk
+
+    @property
+    def _llm_type(self) -> str:
+        """Get the type of language model used by this chat model."""
+        return self.model_type
+
+    @property
+    def _identifying_params(self) -> Dict[str, Any]:
+        """Return a dictionary of identifying parameters."""
+        return {"model_name": self.model_name}
+
+
 class PlaceholderModel(BaseChatModel):
     
     model_name: str = Field(default="ghost")
@@ -668,4 +755,5 @@ class PlaceholderModel(BaseChatModel):
     def _identifying_params(self) -> Dict[str, Any]:
         """Return a dictionary of identifying parameters."""
         return {"model_name": self.model_name}
-    
+
+

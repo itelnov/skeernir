@@ -3,10 +3,8 @@ import asyncio
 import logging
 from uuid import uuid4
 import json
-import httpx
 from asyncio.queues import QueueEmpty
 from itertools import chain
-
 
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -180,16 +178,6 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
             await session.close()
 
 
-# def get_current_user(
-#         request: Request, 
-#         db: Session = Depends(get_db)
-#     ) -> Optional[models.User]:
-#     user_id = request.session.get("user_id")
-#     if user_id:
-#         return db.query(models.User).filter(models.User.id == user_id).first()
-#     return None
-
-
 async def get_current_user(
     request: Request,
     db: AsyncSession = Depends(get_db)
@@ -200,31 +188,6 @@ async def get_current_user(
         result = await db.execute(stmt)
         return result.scalar_one_or_none()
     return None
-
-
-# def get_conversation_messages(
-#         db: Session, 
-#         session_id: str) -> List[models.Message]:
-#     """
-#     Retrieve all messages for a specific conversation, sorted by timestamp in 
-#     descending order.
-    
-#     Args:
-#         db (Session): SQLAlchemy database session
-#         session_id (str): ID of the conversation to fetch messages for
-        
-#     Returns:
-#         List[models.Message]: List of messages sorted by timestamp 
-#         (newest first)
-#     """
-    
-#     messages = (
-#         db.query(models.Message)
-#             .filter(models.Message.session_uuid == session_id)
-#             .order_by(desc(models.Message.id))
-#             .all()
-#     )
-#     return messages
 
 
 # Message operations
@@ -242,28 +205,6 @@ async def get_conversation_messages(
     )
     result = await db.execute(stmt)
     return result.scalars().all()
-
-
-# def get_conversation(
-#     db: Session,
-#     user: models.User,
-#     session_id: str,
-# ):
-#     conv = db.query(models.Conversation)\
-#     .filter(models.Conversation.session_uuid == session_id)\
-#     .first()
-#     if not conv:
-#         _conv = models.Conversation(
-#             session_uuid = session_id,
-#             user_id = user.id,
-#             title = "new conversation ..."
-#         )
-#         db.add(_conv)
-#         db.commit()
-#         conv = db.query(models.Conversation)\
-#             .filter(models.Conversation.session_uuid == session_id)\
-#             .first()
-#     return conv
 
 
 async def get_conversation(
@@ -291,18 +232,6 @@ async def get_conversation(
     return conv
 
 
-# def get_message_attachments(    
-#     db: Session, 
-#     message: models.Message
-#     )-> List[models.Attachment]:
-#     message_attachments = (
-#         db.query(models.Attachment)
-#         .filter(models.Attachment.message_uuid == message.message_uuid)
-#         .all()
-#     )
-#     return message_attachments
-
-
 async def get_message_attachments(
     db: AsyncSession,
     message: models.Message
@@ -315,19 +244,6 @@ async def get_message_attachments(
     return result.scalars().all()
 
 
-
-# def get_message_graphlogs(    
-#     db: Session, 
-#     message: models.Message
-#     )-> List[models.GraphLog]:
-#     message_graphlogs = (
-#         db.query(models.GraphLog)
-#         .filter(models.GraphLog.message_uuid == message.message_uuid)
-#         .all()
-#     )
-#     return message_graphlogs
-
-
 async def get_graphlogs(
     db: AsyncSession,
     session_uuid: str,
@@ -338,34 +254,6 @@ async def get_graphlogs(
     )
     result = await db.execute(stmt)
     return result.scalars().all()
-
-
-# def get_conversations_with_earliest_messages(
-#     db: Session, 
-#     user: models.User
-#     )-> Dict[str, str]:
-#     # Step 1: Find all conversations bounded with the given user
-#     user_conversations = (
-#         db.query(models.Conversation)
-#           .filter(models.Conversation.user == user)
-#           .all()
-#     )
-#     result = []
-#     # Step 2: For each user conversation, find the earliest message
-#     for conversation in user_conversations:
-#         earliest_message = (
-#             db.query(models.Message)
-#               .filter(models.Message.session_uuid == conversation.session_uuid)
-#               .order_by(models.Message.timestamp)
-#               .first()
-#         )
-#         # Step 3: Add the session ID and earliest message to the result
-#         if earliest_message:
-#             result.append({
-#                 "session_id": conversation.session_uuid,
-#                 "earliest_message": earliest_message.content,
-#             })
-#     return result
 
 
 async def get_conversations_with_earliest_messages(
@@ -401,26 +289,6 @@ async def get_conversations_with_earliest_messages(
     return result
 
 
-# def delete_conversation_and_related(
-#     db: Session, 
-#     conv: models.Conversation
-# ):
-
-#     # Delete related messages
-#     db.query(models.Message)\
-#         .filter(models.Message.session_uuid == conv.session_uuid)\
-#         .delete(synchronize_session=False)
-
-#     # Delete related attachments
-#     db.query(models.Attachment)\
-#         .filter(models.Attachment.session_uuid == conv.session_uuid)\
-#         .delete(synchronize_session=False)
-
-#     # Finally, delete the conversation itself
-#     db.delete(conv)
-#     db.commit()
-
-
 async def delete_conversation_and_related(
     db: AsyncSession,
     conv: models.Conversation
@@ -440,49 +308,6 @@ async def delete_conversation_and_related(
     # Delete the conversation itself
     await db.delete(conv)
     await db.commit()
-
-
-# def delete_message_with_attachments(db: Session, message_uuid: str) -> bool:
-#     """
-#     Delete a message and all its attachments from the database.
-
-#     Args:
-#         db: SQLAlchemy database session
-#         message_uuid: UUID of the message to delete
-
-#     Returns:
-#         bool: True if deletion was successful, False otherwise
-
-#     Raises:
-#         SQLAlchemyError: If there's a database error during deletion
-#     """
-#     try:
-#         # Start a transaction
-#         with db.begin():
-#             # Get the message
-#             message = db.query(models.Message).filter(
-#                 models.Message.message_uuid == message_uuid
-#             ).first()
-
-#             if not message:
-#                 return False
-
-#             # Due to cascade="all, delete-orphan" in the Message model,
-#             # deleting the message will automatically delete all associated 
-#             # attachments
-#             db.delete(message)
-
-#             # Commit the transaction
-#             db.commit()
-
-#         return True
-
-#     except SQLAlchemyError as e:
-#         # Roll back the transaction in case of error
-#         db.rollback()
-#         # You might want to log the error here
-#         logger.info(f"Error deleting message: {str(e)}")
-#         return False
 
 
 async def delete_message_with_attachments(

@@ -6,17 +6,18 @@ __pycache__/
 # C extensions
 *.so
 
-# json configs
-configs/gpt-4o-mini.json
-configs/openai-rag-corrective.json
-configs/Sonnet35.json
+# developemnt
 tailwindcss-linux-x64
 
+# databases
 chat.db
 
 # vscode
 .vscode/
+
+# execs
 .outputs/
+.logs
 
 # Distribution / packaging
 .Python
@@ -66,16 +67,6 @@ cover/
 # Translations
 *.mo
 *.pot
-
-# Django stuff:
-*.log
-local_settings.py
-db.sqlite3
-db.sqlite3-journal
-
-# Flask stuff:
-instance/
-.webassets-cache
 
 # Scrapy stuff:
 .scrapy

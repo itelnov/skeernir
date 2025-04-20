@@ -1,0 +1,13 @@
+{
+    "agent_graph": "ollama_server_chat.py",
+    "host_name": "ollama",
+    "model_name": "deepseek-r1:14b",
+    "host_params": {
+    },
+    "sampling": {
+        "temperature": 0.1,
+        "num_ctx": 32000,
+        "num_predict": -1
+    }
+
+}

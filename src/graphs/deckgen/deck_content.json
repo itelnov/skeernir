@@ -1,0 +1,183 @@
+{
+    "styles": {
+        "title": {
+            "font_size": 24
+        },
+        "text_block": {
+            "font_size": 18
+        },
+        "list_item": {
+            "font_size": 16
+        }
+    },
+    "slides": [
+        {
+            "title": "Introduction to Corrective Graphs",
+            "content": [
+                {
+                    "type": "text",
+                    "text": "Corrective graphs are used to represent relationships and dependencies between variables in a system.",
+                    "style": "text_block"
+                },
+                {
+                    "type": "list",
+                    "items": [
+                        "Corrective graphs help in identifying root causes of issues.",
+                        "They are useful in system analysis and troubleshooting.",
+                        "Corrective graphs can be represented using various types of graphs."
+                    ],
+                    "style": "list_item"
+                }
+            ]
+        },
+        {
+            "title": "Types of Corrective Graphs",
+            "content": [
+                {
+                    "type": "text",
+                    "text": "There are several types of corrective graphs, including:",
+                    "style": "text_block"
+                },
+                {
+                    "type": "list",
+                    "items": [
+                        "Directed Graphs",
+                        "Undirected Graphs",
+                        "Weighted Graphs",
+                        "Bipartite Graphs"
+                    ],
+                    "style": "list_item"
+                }
+            ]
+        },
+        {
+            "title": "Directed Graphs",
+            "content": [
+                {
+                    "type": "text",
+                    "text": "Directed graphs have edges with a direction, indicating a one-way relationship.",
+                    "style": "text_block"
+                },
+                {
+                    "type": "image",
+                    "path": "corrective_rag_graph.png",
+                    "position": {"left": 1, "top": 1, "width": 3, "height": 3}
+                }
+            ]
+        },
+        {
+            "title": "Undirected Graphs",
+            "content": [
+                {
+                    "type": "text",
+                    "text": "Undirected graphs have edges without a direction, indicating a two-way relationship.",
+                    "style": "text_block"
+                },
+                {
+                    "type": "image",
+                    "path": "corrective_rag_graph.png",
+                    "position": {"left": 1, "top": 1, "width": 3, "height": 3}
+                }
+            ]
+        },
+        {
+            "title": "Weighted Graphs",
+            "content": [
+                {
+                    "type": "text",
+                    "text": "Weighted graphs have edges with weights, representing the strength or cost of the relationship.",
+                    "style": "text_block"
+                },
+                {
+                    "type": "image",
+                    "path": "corrective_rag_graph.png",
+                    "position": {"left": 1, "top": 1, "width": 3, "height": 3}
+                }
+            ]
+        },
+        {
+            "title": "Bipartite Graphs",
+            "content": [
+                {
+                    "type": "text",
+                    "text": "Bipartite graphs have two disjoint sets of nodes, with edges only between nodes of different sets.",
+                    "style": "text_block"
+                },
+                {
+                    "type": "image",
+                    "path": "corrective_rag_graph.png",
+                    "position": {"left": 1, "top": 1, "width": 3, "height": 3}
+                }
+            ]
+        },
+        {
+            "title": "Applications of Corrective Graphs",
+            "content": [
+                {
+                    "type": "text",
+                    "text": "Corrective graphs are used in various fields, including:",
+                    "style": "text_block"
+                },
+                {
+                    "type": "list",
+                    "items": [
+                        "Network Analysis",
+                        "Supply Chain Management",
+                        "Social Network Analysis",
+                        "Dependency Management"
+                    ],
+                    "style": "list_item"
+                }
+            ]
+        },
+        {
+            "title": "Network Analysis",
+            "content": [
+                {
+                    "type": "text",
+                    "text": "In network analysis, corrective graphs help in understanding the structure and behavior of networks.",
+                    "style": "text_block"
+                },
+                {
+                    "type": "image",
+                    "path": "corrective_rag_graph.png",
+                    "position": {"left": 1, "top": 1, "width": 3, "height": 3}
+                }
+            ]
+        },
+        {
+            "title": "Supply Chain Management",
+            "content": [
+                {
+                    "type": "text",
+                    "text": "In supply chain management, corrective graphs help in optimizing the flow of goods and services.",
+                    "style": "text_block"
+                },
+                {
+                    "type": "image",
+                    "path": "corrective_rag_graph.png",
+                    "position": {"left": 1, "top": 1, "width": 3, "height": 3}
+                }
+            ]
+        },
+        {
+            "title": "Conclusion",
+            "content": [
+                {
+                    "type": "text",
+                    "text": "Corrective graphs are powerful tools for analyzing and managing complex systems.",
+                    "style": "text_block"
+                },
+                {
+                    "type": "list",
+                    "items": [
+                        "They provide a visual representation of relationships and dependencies.",
+                        "They help in identifying root causes and optimizing processes.",
+                        "They are used in various fields, including network analysis and supply chain management."
+                    ],
+                    "style": "list_item"
+                }
+            ]
+        }
+    ]
+}

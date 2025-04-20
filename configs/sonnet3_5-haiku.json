@@ -1,0 +1,8 @@
+{
+    "agent_graph": "anthropic_chat.py",
+    "model_name": "claude-3-5-haiku-latest",
+    "sampling": {
+        "temperature": 0.7,
+        "max_tokens": 8192
+    }
+}

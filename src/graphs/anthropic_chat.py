@@ -1,10 +1,11 @@
-# https://langchain-ai.github.io/langgraph/how-tos/memory/manage-conversation-history/#build-the-agent
+import os
 import sys
 from uuid import uuid4
 import asyncio
 
+from dotenv import load_dotenv
 from langgraph.graph import MessagesState, StateGraph, START, END
-from langchain_openai import ChatOpenAI
+from langchain_anthropic import ChatAnthropic
 from langgraph.checkpoint.memory import MemorySaver
 from langchain_core.messages import AIMessageChunk, HumanMessage
 
@@ -15,19 +16,21 @@ if p not in sys.path:
 
 from src.registry import tool_graph
 
+# loading variables from .env file
+load_dotenv()
 
-@tool_graph(name='gpt-4o-mini', tag="chat/vision API", 
-            att_modals=['text', 'image'])
-def get_openaigpt(api_token=None, **kwargs):
+
+@tool_graph(name='anthropic', tag="chat/vision API", att_modals=['text', 'image'])
+def get_claude(agent_graph: str, model_name: str, **kwargs):
     
     memory = MemorySaver()
     kwargs.pop("port", None)
     sampling_data = kwargs.pop("sampling", {})
 
-    model = ChatOpenAI(
+    model = ChatAnthropic(
         streaming=True,
-        api_key=api_token,
-        model="gpt-4o-mini-2024-07-18",
+        api_key=os.environ["ANTHROPIC_API_KEY"],
+        model=model_name,
         **kwargs)
     
     # Define the function that calls the model
@@ -40,8 +43,11 @@ def get_openaigpt(api_token=None, **kwargs):
     workflow.add_node("chatbot", call_model)
     workflow.add_edge(START, "chatbot")
     workflow.add_edge("chatbot", END)
-    return workflow.compile(checkpointer=memory), model
 
+    # Return compiled graph and resorces (processes which run server / clients)
+    # to let GraphManager properly handle them
+    return workflow.compile(checkpointer=memory), model
+# checkpointer=memory
 
 if __name__ == "__main__":
     
@@ -50,7 +56,6 @@ if __name__ == "__main__":
     import tracemalloc
     from src.registry import GraphManager
     from src.graphs.utils import run_graph_in_terminal
-
 
     tracemalloc.start()
 
@@ -65,7 +70,7 @@ if __name__ == "__main__":
         asyncio.run(
             run_graph_in_terminal(
                 graph_manager=GM,
-                config="gpt-4o-mini-default",
+                config="Sonnet35",
                 session_id=session_id))
     finally:
         

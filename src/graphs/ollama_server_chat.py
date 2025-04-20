@@ -17,38 +17,42 @@ p = "/".join(sys.path[0].split('/')[:-2])
 if p not in sys.path:
     sys.path.append(p)
 
-from src.registry import tool_graph, terminate_processes
+from src.registry import tool_graph, terminate_processes, terminate_threads
 from src.graphs.utils import (
     OllamaClientWrapper, run_server, check_server_healthy)
 
 
-# @tool_graph(name='llama3_2_vision_11b_ollama', tag="chat/vision API", 
-#             att_modals=['text', 'image'])
-def get_llama3_2_vision_11b_on_ollama_server(
-    
-        server: str,
-        model_name: str,
-        **kwargs) -> Union[CompiledStateGraph, Tuple[CompiledStateGraph, Any]]:
+"""
+https://github.com/ollama/ollama/blob/main/docs/api.md#list-local-models
+https://github.com/ollama/ollama/blob/main/docs/modelfile.md#build-from-a-gguf-file
+"""
+
+
+@tool_graph(name='model_on_ollama_server', tag="chat", att_modals=['text', 'image'])
+def get_model_on_ollama_server(
+    agent_graph: str,
+    host_name: str,
+    model_name: str,
+    **kwargs) -> Union[CompiledStateGraph, Tuple[CompiledStateGraph, Any]]:
     try:   
         memory = MemorySaver()
         port = kwargs.pop("port", 11434)
         os.environ["OLLAMA_HOST"] = f"0.0.0.0:{port}"
-        graph_server_process = None
-
+        host_params = kwargs.pop('host_params', {})
         graph_server_process = run_server(
-            server,
+            host_name,
             model_name,
             port=port, 
             use_gpu=True, 
-            **kwargs)
+            **host_params)
 
         if not check_server_healthy(
             port, model_name, time_to_wait=2, timeout_seconds=10):
             try:
                 terminate_processes([graph_server_process])
             except Exception as e:
-                logging.error(f"Graph {e} failed to start")
-                return 
+                logging.error(f"Graph failed to start: \n{e}")
+                raise 
             
         logging.info("Start pull if will be needed")
         pull_process = subprocess.Popen(
@@ -111,7 +115,6 @@ if __name__ == "__main__":
     import asyncio
     import tracemalloc
     import logging
-
     from src.registry import GraphManager
     from src.graphs.utils import run_graph_in_terminal
 
@@ -122,13 +125,14 @@ if __name__ == "__main__":
     tracemalloc.start()
     
     GM = GraphManager()
-
+        
+    session_id = str(uuid4())
     try:
         session_id = str(uuid4())
         asyncio.run(
             run_graph_in_terminal(
                 graph_manager=GM,
-                config="llama3_2_vision_11b_ollama",
+                config="ollama_server_model",
                 session_id=session_id))
     finally:
         snapshot = tracemalloc.take_snapshot()

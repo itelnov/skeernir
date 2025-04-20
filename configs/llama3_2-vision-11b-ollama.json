@@ -1,5 +1,6 @@
 {
-    "server": "ollama",
+    "agent_graph": "ollama_server_chat.py",
+    "host_name": "ollama",
     "model_name": "llama3.2-vision",
     "sampling": {
         "temperature": 0.7,

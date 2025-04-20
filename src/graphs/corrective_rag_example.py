@@ -1,8 +1,10 @@
+import os
 import sys
 import json
 from typing import List, TypedDict, Dict, Any, Optional, Type, TypeVar, Annotated
 from uuid import uuid4
 
+from dotenv import load_dotenv
 from pydantic import BaseModel as DataBaseModel
 from pydantic import Field, field_validator, Field, PrivateAttr
 from langchain_chroma import Chroma
@@ -24,7 +26,6 @@ from fastapi.templating import Jinja2Templates
 from langchain_core.messages import RemoveMessage, AnyMessage
 
 
-
 # for testing purposes:
 p = "/".join(sys.path[0].split('/')[:-2])
 if p not in sys.path:
@@ -32,6 +33,9 @@ if p not in sys.path:
 from src.registry import tool_graph
 from src.entry import LoggedAttribute, BaseEntry
 from src import models
+
+# loading variables from .env file
+load_dotenv()
 
 
 templates = Jinja2Templates(directory="templates")
@@ -158,11 +162,12 @@ class DocumentEntry(BaseEntry):
         return json.dumps(self._format_content())
     
 
-def get_retrival_grader_chain(api_token: str) -> Runnable:
+def get_retrival_grader_chain(model_name: str, api_token: str) -> Runnable:
     """
     Creates a runnable chain for grading the relevance of retrieved documents.
 
     Args:
+        model_name (str): OpenAI model
         api_token (str): OpenAI API token for authentication.
 
     Returns:
@@ -170,7 +175,7 @@ def get_retrival_grader_chain(api_token: str) -> Runnable:
     """
     tool_name = convert_to_openai_tool(GradeDocuments)["function"]["name"]
     llm = ChatOpenAI(
-        model="gpt-4o-mini-2024-07-18",
+        model=model_name,
         api_key=api_token,
         temperature=0).bind_tools(
         [GradeDocuments], tool_choice=tool_name, parallel_tool_calls=False)
@@ -195,12 +200,13 @@ def get_retrival_grader_chain(api_token: str) -> Runnable:
     return retrieval_grader
 
 
-def get_generation_chain(api_token: str) -> Runnable:
+def get_generation_chain(model_name: str, api_token: str) -> Runnable:
     """
     Creates a runnable chain for generating text based on the context provided 
     by documents.
 
     Args:
+        model_name (str): OpenAI model
         api_token (str): OpenAI API token for authentication.
 
     Returns:
@@ -208,7 +214,7 @@ def get_generation_chain(api_token: str) -> Runnable:
     """
     llm = ChatOpenAI(
         temperature=0.75,
-        model="gpt-4o-mini-2024-07-18",
+        model=model_name,
         api_key=api_token)
     prompt = hub.pull("rlm/rag-prompt")
     generation_chain = prompt | llm
@@ -231,17 +237,17 @@ def get_web_search_tool(tavily_api_key: str) -> Runnable:
     return web_search_tool
 
 
-@tool_graph(name='openai-rag-corrective', tag="RAG", entries_map=True)
+@tool_graph(name='corective-rag-with-openai', tag="RAG", entries_map=True)
 def get_corrective_rag_graph(
-    api_token: str,
-    tavily_api_key: str,
+    agent_graph: str, 
+    model_name: str, 
     **kwargs) -> StateGraph:
     """
     Constructs and returns a StateGraph for the RAG (Retrieval-Generation) pipeline.
 
     Args:
-        api_token (str): OpenAI API token for authentication.
-        tavily_api_key (str): Tavily API key for web search.
+        agent_graph
+        model_name
         **kwargs: Additional configuration parameters.
 
     Returns:
@@ -252,12 +258,18 @@ def get_corrective_rag_graph(
         collection_name=kwargs["collection_name"],
         persist_directory=kwargs["vectordb_path"],
         # client_settings=Settings(anonymized_telemetry=False),
-        embedding_function=OpenAIEmbeddings(api_key=api_token)).as_retriever(
+        embedding_function=OpenAIEmbeddings(
+            api_key=os.environ["OPENAI_API_KEY"])).as_retriever(
             search_type="similarity", search_kwargs={"k": 5})
     
-    retrieval_grader_chain = get_retrival_grader_chain(api_token)
-    generation_chain = get_generation_chain(api_token)
-    web_search_tool = get_web_search_tool(tavily_api_key)
+    retrieval_grader_chain = get_retrival_grader_chain(
+        model_name,
+        os.environ["OPENAI_API_KEY"])
+    generation_chain = get_generation_chain(
+        model_name,
+        os.environ["OPENAI_API_KEY"])
+    web_search_tool = get_web_search_tool(
+        os.environ["TAVILY_API_KEY"])
     
     # Define functions on our nodes
     async def run_retrieve(state: FlowState) -> Dict[str, Any]:
@@ -414,8 +426,8 @@ def get_corrective_rag_graph(
 
     app = workflow.compile(checkpointer=memory)
     
-    app.get_graph().draw_mermaid_png(
-        output_file_path="corrective_rag_graph.png")
+    # app.get_graph().draw_mermaid_png(
+    #     output_file_path="corrective_rag_graph.png")
     
     return app
 

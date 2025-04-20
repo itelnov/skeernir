@@ -275,13 +275,14 @@ class GraphRegistry:
 
         # Load configuration files first
         self._load_configurations()
-        
-        for filename in os.listdir(self.graph_dir):
+
+        for agent_name, params in self._configs.items():
+            filename = params["agent_graph"]
             if filename.endswith('.py') and not filename.startswith('__'):
                 module_name = filename[:-3]  # Remove .py extension
                 try:
                     module = importlib.import_module(module_name)
-                    self._register_module(module)
+                    self._register_module(module, agent_name)
                 except ImportError as e:
                     logging.error(f"Error loading graph {module_name}: {e}")
         
@@ -293,11 +294,11 @@ class GraphRegistry:
         Configurations are named after their plugin with a .json extension.
         """
         for filename in os.listdir(self.config_dir):
-            if filename.endswith('.json'):
-                plugin_name = filename[:-5]  # Remove .json extension
+            if filename.endswith('.json') and not filename.startswith('__'):
+                config = filename[:-5]  # Remove .json extension
                 try:
                     with open(os.path.join(self.config_dir, filename), 'r') as f:
-                        self._configs[plugin_name] = json.load(f)
+                        self._configs[config] = json.load(f)
                 except (IOError, json.JSONDecodeError) as e:
                     logging.error(f"Error loading config {filename}: {e}")
 
@@ -319,7 +320,7 @@ class GraphRegistry:
                 return port
         return None
 
-    def _register_module(self, module):
+    def _register_module(self, module, agent_name):
         """
         Register a module's plugin functions.
         
@@ -332,14 +333,13 @@ class GraphRegistry:
                 # Extract metadata
                 if isinstance(func._graph_metadata, dict):
                     metadata = func._graph_metadata
-                    user_friendly_name = metadata['name']
                     available_port = self.find_available_port()
                     if available_port is None:
                         logging.error("No available ports in the specified range!!")
                         break
                     metadata.update({"port": available_port})
                     # Store graphs with its metadata
-                    module_graphs[user_friendly_name] = {
+                    module_graphs[agent_name] = {
                         'function': func,
                         'graph_params': metadata
                     }
@@ -417,6 +417,10 @@ class GraphManager:
     def default_graph(self):
         return self._default_graph
     
+    def reload_graphs(self):
+        self._graphs_registry.load_graphs()
+        # sessions clean up ??
+
     def _get_or_create_graph(self, graph_name: str, session_id: str) -> GraphContainer:
         """
         Retrieves a graph by name. Creates it if not already in memory.
@@ -424,6 +428,7 @@ class GraphManager:
         if graph_name not in self._graphs:
             get_graph_func, graph_params  = self._graphs_registry.get_graph(
                 graph_name)
+            graph_params["name"] = graph_name
             self._graphs[graph_name] = GraphContainer(
                 get_graph_func, **graph_params)
         

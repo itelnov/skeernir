@@ -1,0 +1,19 @@
+{
+    "agent_graph": "deckgen_agent.py",
+    "output_pth": ".outputs",
+    "host": {
+        "host_name": "ollama",
+        "api_token": "",
+        "model_name": "gemma3:12b",
+        "tool_model_name": "gemma3:12b",
+        "use_gpu": true
+    },
+    "tools_sampling_data": {
+        "temperature": 0.0,
+        "num_ctx": 256
+    },
+    "sampling": {
+        "temperature": 0.2,
+        "num_ctx": 32000
+    }
+}

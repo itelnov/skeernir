@@ -101,18 +101,19 @@ class FlowState(TypedDict):
 DECKGEN_FORMAT = (
     "To sucessfully execute this task, always precisely follow the next "
     "instructions:\n\n"
-    "- Always iclude all parts of the deck into draft, starting from `Slide 1`. "       
+    "- Always iclude all parts of the deck into draft, starting from `Slide 1`.\n"       
     "- Do not consider formatting options for the draft, you have to focus "
     "on content only.\n"
-    "- Start the draft with tag `!DRAFT_STARTS!`"
-    "- End the draft with tag `!DRAFT_ENDS!`"
-    "- Always write suggestions how to improve the deck draft with additrional "
-    "information.\n\n"
+    "- Start the draft with tag `!DRAFT_STARTS!`\n"
+    "- End the draft with tag `!DRAFT_ENDS!`\n"
+    "- Enumerate all slides. Keep slides enumeration in order!\n"
+    "- Only after !DRAFT_ENDS! always write suggestions how to improve the deck draft with additrional "
+    "information. \n\n"
     "Example of a deck draft:\n"
-    "Slide 1: `some content you generate`\n\n"
-    "Slide 2: `some content you generate`\n\n"
+    "Slide `slide number`: `some content you generate`\n\n"
+    "Slide `slide number`: `some content you generate`\n\n"
     "..."
-    "My Suggestions how to improve: `suggestions for improvement`\n\n"
+    "My Suggestions how to improve: `suggestions for improvement`\n"
     "\n\n")
 
 
@@ -144,24 +145,23 @@ def get_deckgen_sys_message()-> str:
 
 @tool_graph(name='deckgen', tag="Agent", entries_map=True)
 def get_deckgen(
-        server: str,
-        api_token: str,
-        model_name: str,
+        host: Dict,
+        output_pth: str,
         **kwargs) -> Union[CompiledStateGraph, Tuple[CompiledStateGraph, Any]]:
     try:
         port = kwargs.pop("port", 11434)
-        tool_model_name = kwargs["tool_model_name"]
-        sampling_data = kwargs.get("sampling")
-        tools_sampling_data = kwargs.get("tools_sampling_data")
-        output_pth = kwargs.get("output_folder", ".outputs")
+        tool_model_name = host["tool_model_name"]
+        model_name = host["model_name"]
+        sampling_data = kwargs.get("sampling", {})
+        tools_sampling_data = kwargs.get("tools_sampling_data", {})
         Path(output_pth).mkdir(parents=True, exist_ok=True)
 
         graph_server_process = None
         graph_server_process = run_server(
-            server,
+            host["host_name"],
             model_name,
             port=port,
-            use_gpu=True, 
+            use_gpu=host["use_gpu"], 
             **kwargs)
 
         if not check_server_healthy(
@@ -172,6 +172,7 @@ def get_deckgen(
                 logging.error(f"Graph failed to start: \n{e}")
                 raise 
         
+        # TODO do smth with this sheet
         my_env = os.environ.copy()
         my_env["OLLAMA_HOST"] = f"0.0.0.0:{port}"
         logging.info("Start pull if will be needed")
@@ -184,36 +185,35 @@ def get_deckgen(
             env=my_env
             )
 
-        # while True:
-        #     stdout_line = pull_process_a.stdout.readline()
-        #     stderr_line = pull_process_a.stderr.readline()
+        while True:
+            stdout_line = pull_process_a.stdout.readline()
+            stderr_line = pull_process_a.stderr.readline()
             
-        #     if stdout_line == '' and stderr_line == '' and pull_process_a.poll() is not None:
-        #         break
+            if stdout_line == '' and stderr_line == '' and pull_process_a.poll() is not None:
+                break
             
-        #     if stdout_line:
-        #         logging.info(f"STDOUT: {stdout_line.strip()}")
-        #     if stderr_line:
-        #         logging.info(f"STDERR: {stderr_line.strip()}")
+            if stdout_line:
+                logging.info(f"STDOUT: {stdout_line.strip()}")
+            if stderr_line:
+                logging.info(f"STDERR: {stderr_line.strip()}")
 
-
-        port2 = port + 77
-        graph_server_process = run_server(
-            server,
-            model_name,
-            port=port2,
-            use_gpu=False, 
-            **kwargs)
-        my_env = os.environ.copy()
-        my_env["OLLAMA_HOST"] = f"0.0.0.0:{port2}"
-        pull_process_b = subprocess.Popen(
-            ["ollama", "pull", tool_model_name],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            bufsize=1,
-            env=my_env
-            )
+        # port2 = port + 77
+        # graph_server_process = run_server(
+        #     server,
+        #     model_name,
+        #     port=port2,
+        #     use_gpu=False, 
+        #     **kwargs)
+        # my_env = os.environ.copy()
+        # my_env["OLLAMA_HOST"] = f"0.0.0.0:{port2}"
+        # pull_process_b = subprocess.Popen(
+        #     ["ollama", "pull", tool_model_name],
+        #     stdout=subprocess.PIPE,
+        #     stderr=subprocess.PIPE,
+        #     text=True,
+        #     bufsize=1,
+        #     env=my_env
+        #     )
 
         # while True:
         #     stdout_line = pull_process_b.stdout.readline()
@@ -228,7 +228,7 @@ def get_deckgen(
         #         logging.info(f"STDERR: {stderr_line.strip()}")
 
         
-        generator = OllamaClientWrapper(
+        llm = OllamaClientWrapper(
             model_name=model_name,
             client=AsyncOllamaClient(
             host=f'http://0.0.0.0:{port}',
@@ -243,24 +243,24 @@ def get_deckgen(
         #     model="gpt-4o-mini-2024-07-18",
         #     **kwargs)
         
-        tool_caller = OllamaClientWrapper(
-            model_name=tool_model_name,
-            client=OllamaClient(
-                host=f'http://0.0.0.0:{port2}',
-                headers={'x-some-header': 'some-value'}
-            )
-        )
+        # tool_caller = OllamaClientWrapper(
+        #     model_name=tool_model_name,
+        #     client=OllamaClient(
+        #         host=f'http://0.0.0.0:{port2}',
+        #         headers={'x-some-header': 'some-value'}
+        #     )
+        # )
 
         system_messager = PlaceholderModel(model_name="ghost")
 
         async def run_drafter(state: FlowState):
             
             user_content = state["messages"]
-            generator.system_message = DRAFTER_SYSTEM_MESSAGE
+            llm.system_message = DRAFTER_SYSTEM_MESSAGE
 
             if state.get("last_node", "") == VERIFY_DRAFTER:                
 
-                generator.system_message = "You are helpfull assistant."
+                llm.system_message = "You are helpfull assistant."
                 user_message = get_drafter_prompt_to_improve(
                     state["deck_draft"].content,
                     state["feedback"].content
@@ -268,7 +268,7 @@ def get_deckgen(
                 user_content = [HumanMessage(content=[
                     {"type": "text", "text": user_message}])]
                 
-            generated = await generator.ainvoke(user_content, **sampling_data)
+            generated = await llm.ainvoke(user_content, **sampling_data)
             sampling_data["response_text"] = (
                 "I need your feedback now. Type what to improve or type /yes "
                 "to continue")
@@ -289,7 +289,7 @@ def get_deckgen(
 
         async def should_continue(state: FlowState):
             if state["last_node"] == VERIFY_DRAFTER:
-                tool_caller.system_message = (
+                llm.system_message = (
                     "You are an assitent. Try to understand the User intention "
                     "from the message and conclude:\n\n"
                     "0. The User wants to step back and improve the content.\n"
@@ -309,8 +309,8 @@ def get_deckgen(
                     action = 1
                 else:
                     try:
-                        result = tool_caller.invoke(
-                            [state["feedback"]["Feedback"]], 
+                        result = llm.invoke(
+                            [state["feedback"]], 
                             format=UserIntention.model_json_schema(),
                             **tools_sampling_data)
                         action = json.loads(result.content)['action']
@@ -330,15 +330,15 @@ def get_deckgen(
                         "\n\nGreat, Let's continue!\n\n")
                     _ = await system_messager.ainvoke(
                         [], **sampling_data)
-                    return DECKGEN
+                    return CLEANUP
                 
                 if int(action) == 0:
                     return DRAFTER
                 
-            if state["last_node"] == EXECUTOR:
-                if state["exec_required"]:
-                    return DECKGEN
-                return CLEANUP
+            # if state["last_node"] == EXECUTOR:
+            #     if state["exec_required"]:
+            #         return DECKGEN
+            #     return CLEANUP
 
         async def run_deckgen(state: FlowState):
             
@@ -454,8 +454,8 @@ def get_deckgen(
         workflow = StateGraph(MessagesState)
         workflow.add_node(DRAFTER, run_drafter)
         workflow.add_node(VERIFY_DRAFTER, verify_drafter)
-        workflow.add_node(DECKGEN, run_deckgen)
-        workflow.add_node(EXECUTOR, execute_code)
+        # workflow.add_node(DECKGEN, run_deckgen)
+        # workflow.add_node(EXECUTOR, execute_code)
         workflow.add_node(CLEANUP, clean_up)
         
         workflow.add_edge(START, DRAFTER)
@@ -466,19 +466,19 @@ def get_deckgen(
             path=should_continue,
             path_map={
                 VERIFY_DRAFTER: VERIFY_DRAFTER,
-                DECKGEN: DECKGEN,
+                CLEANUP: CLEANUP,
                 DRAFTER: DRAFTER
             }
         )
-        workflow.add_edge(DECKGEN, EXECUTOR)
-        workflow.add_conditional_edges(
-            source=EXECUTOR,
-            path=should_continue,
-            path_map={
-                DECKGEN: DECKGEN,
-                CLEANUP: CLEANUP
-            }
-        )
+        # workflow.add_edge(DECKGEN, EXECUTOR)
+        # workflow.add_conditional_edges(
+        #     source=EXECUTOR,
+        #     path=should_continue,
+        #     path_map={
+        #         DECKGEN: DECKGEN,
+        #         CLEANUP: CLEANUP
+        #     }
+        # )
         workflow.add_edge(CLEANUP, END)
         memory = MemorySaver()
         app = workflow.compile(checkpointer=memory)
@@ -487,15 +487,15 @@ def get_deckgen(
         logging.error(e)
         try:
             terminate_processes(
-                [graph_server_process, pull_process_a, pull_process_b])
+                [graph_server_process, pull_process_a])
         except:
             pass
         raise
 
-    app.get_graph().draw_mermaid_png(
-        output_file_path="deckgen.png")
+    # app.get_graph().draw_mermaid_png(
+    #     output_file_path="deckgen.png")
 
-    return app, graph_server_process, pull_process_a, pull_process_b
+    return app, graph_server_process, pull_process_a
 
 
 if __name__ == "__main__":

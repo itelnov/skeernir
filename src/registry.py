@@ -272,7 +272,6 @@ class GraphRegistry:
         # Clear existing plugins and configs
         self._graphs.clear()
         self._configs.clear()
-
         # Load configuration files first
         self._load_configurations()
 
@@ -418,6 +417,9 @@ class GraphManager:
         return self._default_graph
     
     def reload_graphs(self):
+
+        self._sessions.clear()
+        self._graph_sessions.clear()
         self._graphs_registry.load_graphs()
         # sessions clean up ??
 

@@ -6,6 +6,7 @@ import requests
 import json
 from inspect import signature
 import time
+from datetime import datetime
 
 from jinja2.sandbox import ImmutableSandboxedEnvironment
 from jinja2.environment import Template
@@ -111,9 +112,11 @@ def run_server(
     
     cmd.extend([str(arg) for arg in arguments])
     
-    # TODO reimplement nicely
     model_tag = model_path.replace("/", "_")
-    log_file_path = f".logs/server_{server}_model_{model_tag}_logs.txt"
+    now = datetime.now()
+    timestamp = now.strftime("%Y-%m-%d_%H-%M-%S")
+    
+    log_file_path = f".logs/{timestamp}_{server}_{model_tag}_logs.txt"
 
     # Start the subprocess
     with open(log_file_path, "w") as log_file:

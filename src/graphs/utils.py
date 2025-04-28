@@ -720,6 +720,120 @@ class MistralCompatibleChatModel(BaseChatModel):
         return {"model_name": self.model_name}
 
 
+class PerplexityChatModel(BaseChatModel):
+
+    model_name: str
+    api_key: str
+    SYSTEM_MESSAGE: str = ""
+    
+    def __init__(self, model_name: str, api_key: str, **kwargs):
+        super().__init__(model_name=model_name, api_key=api_key, **kwargs)
+
+    def _format_message_state(self, state: MessagesState):
+
+        formatted_messages = []
+        if self.SYSTEM_MESSAGE:
+            formatted_messages.append({
+                "role": "system",
+                "content": self.SYSTEM_MESSAGE
+            })
+        for message in state:
+            
+            if isinstance(message, AIMessage):
+                role = "assistant"
+            elif isinstance(message, HumanMessage):
+                role = "user"
+            else:
+                raise ValueError(f"Unknown message type: {type(message)}")
+            
+            message_dict = {
+                "role": role,
+                "content": message.content
+            }
+
+            formatted_messages.append(message_dict)
+
+        return formatted_messages
+    
+    def _generate(self, messages, stop = None, run_manager = None, **kwargs):
+        return super()._generate(messages, stop, run_manager, **kwargs)
+
+    async def _astream(
+        self,
+        messages: List[BaseMessage],
+        stop: Optional[List[str]] = None,
+        run_manager: Optional[CallbackManagerForLLMRun] = None,
+        **kwargs: Any,
+    ) -> AsyncIterator[ChatGenerationChunk]:
+
+        prompt = self._format_message_state(messages)
+        
+        endpoint = "https://api.perplexity.ai/chat/completions"
+        payload = {
+            "model": self.model_name,
+            "messages": prompt,
+            "stream": True,
+        }
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
+
+        payload.update(kwargs)
+        
+        try:
+            response_stream = requests.request(
+                "POST",
+                endpoint, 
+                json=payload,
+                stream=True,
+                headers=headers)
+
+        except requests.exceptions.RequestException as e:
+            raise Exception(
+                f"Error making request to perplexity ai: {str(e)}")
+
+        citations = None
+        for line in response_stream.iter_lines():
+            # line_data["citations"]
+            line = line.decode('utf-8')
+            if line:
+                line_data = json.loads(line.replace("data: ", ""))
+                
+                if not citations:
+                    citations = line_data.get("citations", ["no citations"])
+                
+                m = line_data["choices"][0]["delta"]
+                chunk = ChatGenerationChunk(
+                    message=AIMessageChunk(content=m['content']))
+
+                if run_manager:
+                    # This is optional in newer versions of LangChain
+                    # The on_llm_new_token will be called automatically
+                    run_manager.on_llm_new_token(line_data, chunk=chunk)
+                
+                yield chunk
+
+        citations = "\n\n### Citations:<br/>\n\n" + "\n".join(
+            [f"{i}. {c}" for i, c in enumerate(citations)])
+        
+        chunk = ChatGenerationChunk(
+            message=AIMessageChunk(
+                content=citations, response_metadata={}))
+
+        yield chunk
+
+    @property
+    def _llm_type(self) -> str:
+        """Get the type of language model used by this chat model."""
+        return "sonar"
+
+    @property
+    def _identifying_params(self) -> Dict[str, Any]:
+        """Return a dictionary of identifying parameters."""
+        return {"model_name": self.model_name}
+
+
 class PlaceholderModel(BaseChatModel):
     
     model_name: str = Field(default="ghost")

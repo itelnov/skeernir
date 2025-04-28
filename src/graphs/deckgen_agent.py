@@ -197,7 +197,7 @@ def get_deckgen(
             if stderr_line:
                 logging.info(f"STDERR: {stderr_line.strip()}")
 
-        # port2 = port + 77
+        port2 = port + 77
         # graph_server_process = run_server(
         #     server,
         #     model_name,
@@ -243,13 +243,13 @@ def get_deckgen(
         #     model="gpt-4o-mini-2024-07-18",
         #     **kwargs)
         
-        # tool_caller = OllamaClientWrapper(
-        #     model_name=tool_model_name,
-        #     client=OllamaClient(
-        #         host=f'http://0.0.0.0:{port2}',
-        #         headers={'x-some-header': 'some-value'}
-        #     )
-        # )
+        tool_caller = OllamaClientWrapper(
+            model_name=model_name,
+            client=OllamaClient(
+                host=f'http://0.0.0.0:{port2}',
+                headers={'x-some-header': 'some-value'}
+            )
+        )
 
         system_messager = PlaceholderModel(model_name="ghost")
 
@@ -309,7 +309,7 @@ def get_deckgen(
                     action = 1
                 else:
                     try:
-                        result = llm.invoke(
+                        result = tool_caller.invoke(
                             [state["feedback"]], 
                             format=UserIntention.model_json_schema(),
                             **tools_sampling_data)
@@ -344,7 +344,7 @@ def get_deckgen(
             
             with open("src/graphs/deckgen/test.md", 'r', encoding='utf-8') as file:
                 mk_user_gide = file.read()
-            generator.system_message = get_deckgen_sys_message()
+            llm.system_message = get_deckgen_sys_message()
             
             if not state["deck_code"]:
                 try:
@@ -384,12 +384,12 @@ def get_deckgen(
                         content=[{"type": "text", "text": context}])
                     ]
             
-                generated = await generator.ainvoke(
+                generated = await llm.ainvoke(
                     state["deck_code"], **sampling_data)
                 state["deck_code"].append(generated)
             
             else:
-                generated = await generator.ainvoke(
+                generated = await llm.ainvoke(
                     state["deck_code"], **sampling_data)
                 state["deck_code"] = [
                     RemoveMessage(id=m.id) for m in state["deck_code"][-2:]]

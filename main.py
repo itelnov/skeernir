@@ -5,6 +5,7 @@ from uuid import uuid4
 import json
 from asyncio.queues import QueueEmpty
 from itertools import chain
+from collections import defaultdict
 
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -219,17 +220,39 @@ async def get_conversation(
     result = await db.execute(stmt)
     conv = result.scalar_one_or_none()
 
-    if not conv:
-        conv = models.Conversation(
-            session_uuid=session_id,
-            user_id=user.id,
-            title="new conversation ..."
-        )
-        db.add(conv)
-        await db.commit()
-        await db.refresh(conv)
+    # if not conv:
+    #     conv = models.Conversation(
+    #         session_uuid=session_id,
+    #         user_id=user.id,
+    #         graph_name=graph_name,
+    #         title="new conversation ..."
+    #     )
+    #     db.add(conv)
+    #     await db.commit()
+    #     await db.refresh(conv)
 
     return conv
+
+
+async def add_conversation(
+    db: AsyncSession,
+    user: models.User,
+    session_id: str,
+    graph_name: str
+) -> models.Conversation:
+    
+    conv = models.Conversation(
+        session_uuid=session_id,
+        user_id=user.id,
+        graph_name=graph_name,
+        title="new conversation ..."
+    )
+    db.add(conv)
+    await db.commit()
+    await db.refresh(conv)
+
+    return conv
+
 
 
 async def get_message_attachments(
@@ -284,6 +307,8 @@ async def get_conversations_with_earliest_messages(
             result.append({
                 "session_id": conversation.session_uuid,
                 "earliest_message": earliest_message.content,
+                "graph_name": conversation.graph_name,
+                "created_at": conversation.created_at,
             })
 
     return result
@@ -696,15 +721,23 @@ async def chat(
     # restore user conversations
     user_convs = await get_conversations_with_earliest_messages(db, user)
 
-    prev_convs_html = ''.join(
-        CONV_TEMPLATE.render(
-            session_id=conv['session_id'],
-            conv_tag=str(conv['earliest_message']),
-            parent_session_id=session_id
-        )
-        for conv in reversed(user_convs)
-    ) if user_convs else ''
-
+    # [conv for conv in reversed(user_convs)]
+    
+    # Step 1: Group and sort entries
+    grouped_data = defaultdict(list)
+    # Grouping the items
+    for entry in user_convs:
+        grouped_data[entry['graph_name']].append(entry)
+    
+    prev_convs_html = ""
+    for graph_name, entries in grouped_data.items():
+        sorted_entries = sorted(entries, key=lambda x: x['created_at'])
+        prev_convs_html += CONV_TEMPLATE.render({
+            "sorted_entries": reversed(sorted_entries),
+            "graph_name": graph_name,
+            "parent_session_id": session_id
+        })
+    
     session = GM.get_session(session_id)
     
     if session is None:
@@ -820,7 +853,8 @@ async def delconv(
             url="/login", status_code=status.HTTP_302_FOUND)
     try:
         conv = await get_conversation(db, user, session_id)
-        await delete_conversation_and_related(db, conv)
+        if conv:
+            await delete_conversation_and_related(db, conv)
         e = f"Conversation {conv.session_uuid} was deleted from database"
         if session_id == parent_session_id:
             GM.remove_session(parent_session_id, with_graph=True)
@@ -850,16 +884,21 @@ async def get_convs_list(
     prev_convs_html = ''
     try:
         # restore user conversations
-        user_convs = await get_conversations_with_earliest_messages(db, user)
-        prev_convs_html = ''.join(
-            CONV_TEMPLATE.render(
-                session_id=conv['session_id'],
-                conv_tag=str(conv['earliest_message']),
-                parent_session_id=session_id
-            )
-            for conv in reversed(user_convs)
-        ) if user_convs else ''    
-    
+        user_convs = await get_conversations_with_earliest_messages(db, user)    
+        grouped_data = defaultdict(list)
+        # Grouping the items
+        for entry in user_convs:
+            grouped_data[entry['graph_name']].append(entry)
+        
+        prev_convs_html = ""
+        for graph_name, entries in grouped_data.items():
+            sorted_entries = sorted(entries, key=lambda x: x['created_at'])
+            prev_convs_html += CONV_TEMPLATE.render({
+                "sorted_entries": reversed(sorted_entries),
+                "graph_name": graph_name,
+                "parent_session_id": session_id
+            })
+
     except Exception as e:
         logger.error(e)
     finally:
@@ -976,10 +1015,12 @@ async def stream_endpoint(
     user = await get_current_user(request, db)
     if not user:
         return RedirectResponse(url="/", status_code=status.HTTP_303_SEE_OTHER)
-    conv = await get_conversation(db, user, session_id)
-    session = GM.get_session(session_id)    
+    
+    session = GM.get_session(session_id)
     graphai = session.graph.graph_call
-
+    conv = await get_conversation(db, user, session_id)
+    if not conv:
+        conv = await add_conversation(db, user, session_id, session.graph.name)
     async def stream_generator(session_id):
         """ Direct stream data for a specific session """
         try:
@@ -1021,14 +1062,20 @@ async def stream_endpoint(
 
             user_convs = await get_conversations_with_earliest_messages(
                 db, user)
-            prev_convs_html = ''.join(
-                CONV_TEMPLATE.render(
-                    session_id=conv['session_id'],
-                    conv_tag=str(conv['earliest_message']),
-                    parent_session_id=session_id
-                )
-                for conv in reversed(user_convs)
-            ) if user_convs else ''
+
+            grouped_data = defaultdict(list)
+            # Grouping the items
+            for entry in user_convs:
+                grouped_data[entry['graph_name']].append(entry)
+            prev_convs_html = ""
+            for graph_name, entries in grouped_data.items():
+                sorted_entries = sorted(entries, key=lambda x: x['created_at'])
+                prev_convs_html += CONV_TEMPLATE.render({
+                    "sorted_entries": reversed(sorted_entries),
+                    "graph_name": graph_name,
+                    "parent_session_id": session_id
+                })
+
             conv_list_html = CONVS_LIST.render(
                 {"conversation_list": prev_convs_html})
             out =  json.dumps({"content": conv_list_html})
@@ -1089,35 +1136,36 @@ async def stream_endpoint(
                                     interrupted=True,
                                     interrupted_value=node_updates[0].value
                                     )
-                                continue                    
-                            for state_attr, val in node_updates.items():
-                                if isinstance(val, LoggedAttribute):
-                                    for item in val:
-                                        db.add(create_graphlog_record(
-                                            conv=conv,
-                                            item_node=node,
-                                            item_type=item.type,
-                                            item_content=item.content_to_store()
-                                        ))
-                                        data = json.dumps(
-                                            {
-                                                "State": f'{node}-{state_attr}-{item.type}',
-                                                "content": item.content_to_send()
-                                            })
-                                        yield f"event: agent_log\ndata: {data}\n\n"
-                                if state_attr == "messages":
-                                    if isinstance(val, AIMessage):
-                                        val = [val]
-                                    for el in val:
-                                        if isinstance(el, AIMessage):
-                                            bot_message_item = create_message_record(
-                                                message_uuid=el.id,
-                                                message=el.content, 
-                                                conv=conv, 
-                                                is_bot=True)
-                                            db.add(bot_message_item)
-                                            new_stream_message = True
-                            await db.commit()
+                                continue
+                            if node_updates:
+                                for state_attr, val in node_updates.items():
+                                    if isinstance(val, LoggedAttribute):
+                                        for item in val:
+                                            db.add(create_graphlog_record(
+                                                conv=conv,
+                                                item_node=node,
+                                                item_type=item.type,
+                                                item_content=item.content_to_store()
+                                            ))
+                                            data = json.dumps(
+                                                {
+                                                    "State": f'{node}-{state_attr}-{item.type}',
+                                                    "content": item.content_to_send()
+                                                })
+                                            yield f"event: agent_log\ndata: {data}\n\n"
+                                    if state_attr == "messages":
+                                        if isinstance(val, AIMessage):
+                                            val = [val]
+                                        for el in val:
+                                            if isinstance(el, AIMessage):
+                                                bot_message_item = create_message_record(
+                                                    message_uuid=el.id,
+                                                    message=el.content, 
+                                                    conv=conv, 
+                                                    is_bot=True)
+                                                db.add(bot_message_item)
+                                                new_stream_message = True
+                                await db.commit()
                     
         except StreamHandlerError as e:
             await db.rollback()

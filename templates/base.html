@@ -210,6 +210,7 @@
                         logDiv.innerHTML = `${state}: ${logItem}`;
                         target.appendChild(logDiv);
                         target.scrollTop = target.scrollHeight;
+                        htmx.process(target);
 
                     }
 
@@ -458,6 +459,7 @@
                         'agent_log', function (event) {
                             const template = JSON.parse(event.data);
                             streamer.addAgentLog(template);
+                            htmx.process(document.body);
                     });
 
                     eventSource.onmessage = (event) => {

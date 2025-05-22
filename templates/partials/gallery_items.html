@@ -1,0 +1,29 @@
+<!-- gallery_items.html -->
+<div class="grid grid-cols-2 gap-4 mt-10">
+    {% for post in posts %}
+    <div class="relative flex border bg-sky-900 border-slate-400 rounded-md transition-all duration-300 ease-in-out hover:scale-105 hover:z-10 hover:shadow-2xl hover:shadow-black hover:border-slate-200 cursor-pointer">
+        <!-- Checkbox positioned absolutely in the top-right corner -->
+        <input
+            type="radio"
+            name="selected_post"
+            class="absolute bottom-2 right-2 z-20 w-5 h-5"
+            hx-post='/sendmessage/{{graph_session}}'
+            hx-vals='{"message": "{{ post.title }}"}'
+        >
+        <div class="p-4 w-full overflow-hidden shadow-md shadow-black">
+            <h2 class="font-semibold w-full text-white mb-2 whitespace-nowrap trancate overflow-hidden text-ellipsis hover:bg-slate-800" 
+            onclick="window.open('{{ post.permalink }}', '_blank')">{{ post.title }}</h2>
+            <div class="flex flex-col justify-start text-sm text-gray-200">
+                <span>u/{{ post.author }}</span>
+                <span>{{ post.score }} pts</span>
+                <span>{{ post.num_comments }} comments</span>
+            </div>
+            {% if post.is_video %}
+            <div class="aspect-w-16 aspect-h-9 text-red-300">
+                <h3>Video Content</h3>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>

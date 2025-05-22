@@ -1,0 +1,4 @@
+{
+    "agent_graph": "mediacheck_agent.py",
+    "model_name": "gpt-4o-mini-2024-07-18"
+}

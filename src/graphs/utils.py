@@ -846,22 +846,53 @@ class PlaceholderModel(BaseChatModel):
     def _generate(self, messages, stop = None, run_manager = None, **kwargs):
         return super()._generate(messages, stop, run_manager, **kwargs)
 
-    def _stream(
+    # def _stream(
+    #     self,
+    #     messages: List[BaseMessage],
+    #     stop: Optional[List[str]] = None,
+    #     run_manager: Optional[CallbackManagerForLLMRun] = None,
+    #     response_text: str = "",
+    #     **kwargs: Any,
+    # ) -> Iterator[ChatGenerationChunk]:
+        
+    #     for word in response_text.split(" "):
+
+    #         if word:
+    #             chunk = ChatGenerationChunk(
+    #                 message=AIMessageChunk(content=word + " "))
+                
+    #             yield chunk
+
+    async def _astream(
         self,
-        messages: List[BaseMessage],
-        stop: Optional[List[str]] = None,
-        run_manager: Optional[CallbackManagerForLLMRun] = None,
         response_text: str = "",
         **kwargs: Any,
-    ) -> Iterator[ChatGenerationChunk]:
+    ) -> AsyncIterator[ChatGenerationChunk]:
         
-        for word in response_text.split(" "):
+        for word in response_text[0].content.split(" "):
 
             if word:
                 chunk = ChatGenerationChunk(
                     message=AIMessageChunk(content=word + " "))
                 
                 yield chunk
+        chunk = ChatGenerationChunk(
+            message=AIMessageChunk(content="", response_metadata={
+                "finish_reason": "stop"
+            }))
+        yield chunk
+
+    @property
+    def _llm_type(self) -> str:
+        """Get the type of language model used by this chat model."""
+        return "ghost_placeholder"
+
+    @property
+    def _identifying_params(self) -> Dict[str, Any]:
+        """Return a dictionary of identifying parameters."""
+        return {"model_name": self.model_name}
+
+
 
     @property
     def _llm_type(self) -> str:

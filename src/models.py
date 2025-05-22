@@ -40,6 +40,7 @@ class Conversation(Base):
     session_uuid = Column(String, unique=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"))
     title = Column(String)
+    graph_name = Column(String)
     interrupted = Column(String, default=False)
     interrupted_value = Column(String, default="")
     state = Column(JSON, nullable=True)

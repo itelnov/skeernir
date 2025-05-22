@@ -1,0 +1,24 @@
+<!-- gallery_items.html -->
+<div class="grid grid-cols-3 gap-4">
+    {% for post in posts %}
+    <div class="flex border border-slate-800"
+         onclick="window.open('{{ post.permalink }}', '_blank')">
+                
+        <div class="p-4">
+            <h2 class="font-semibold line-clamp-2 mb-2 bg-indigo-900" title="{{ post.title }}">{{ post.title }}</h2>
+            <div class="flex justify-between items-center text-sm text-gray-600">
+                <span>u/{{ post.author }}</span>
+                <div class="flex space-x-3 pl-1 pr-1">
+                    <span class="ml-1 mr-1">{{ post.score }} pts</span>
+                    <span class="ml-1 mr-1">{{ post.num_comments }} comments</span>
+                </div>
+            </div>
+            {% if post.is_video %}
+            <div class="aspect-w-16 aspect-h-9 bg-gray-200">
+                <h3>Video Content</h3>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
